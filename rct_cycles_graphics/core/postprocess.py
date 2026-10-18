@@ -41,10 +41,16 @@ def project_onto_ramp(rgb, indices):
     return np.stack([np.interp(lum, ramp_lum, ramp[:, c]) for c in range(3)], axis=-1)
 
 
-def remap_classes(remap_aov, alpha):
-    """Integer remap number per pixel from the (premultiplied) AOV."""
-    safe = np.where(alpha > 1e-6, alpha, 1.0)
-    return np.clip(np.rint(remap_aov / safe), 0, 3).astype(np.int32)
+def remap_classes(coverage, alpha):
+    """Remap number (0-3) per pixel from the per-remap coverage AOVs.
+
+    coverage: (H, W, 3) coverage of remaps 1-3 (each AOV is 1 on surfaces of
+    that remap, filtered like alpha). The remainder of alpha is plain
+    surface; the largest share wins.
+    """
+    plain = alpha - coverage.sum(axis=-1)
+    shares = np.concatenate([plain[..., None], coverage], axis=-1)
+    return np.argmax(shares, axis=-1).astype(np.int32)
 
 
 def bounding_box(mask):

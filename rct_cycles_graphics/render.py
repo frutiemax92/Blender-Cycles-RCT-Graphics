@@ -11,8 +11,9 @@ from . import scene_setup
 from .core import jobs as jobs_core
 from .core import postprocess, projection
 
-#: Name of the AOV written by recolourable materials (see materials.py).
-REMAP_AOV = "rct_remap"
+#: AOVs written by recolourable materials (see materials.py): one coverage
+#: pass per remap, so pixels mixing two remaps are never averaged into a third.
+REMAP_AOVS = {1: "rct_remap_1", 2: "rct_remap_2", 3: "rct_remap_3"}
 
 RENDERABLE_TYPES = {"MESH", "CURVE", "SURFACE", "META", "FONT", "CURVES", "POINTCLOUD", "VOLUME"}
 
@@ -134,10 +135,11 @@ class _SceneState:
 def _configure_passes(scene, view_layer):
     view_layer.use_pass_combined = True
     view_layer.use_pass_position = True
-    if REMAP_AOV not in view_layer.aovs:
-        aov = view_layer.aovs.add()
-        aov.name = REMAP_AOV
-        aov.type = "VALUE"
+    for name in REMAP_AOVS.values():
+        if name not in view_layer.aovs:
+            aov = view_layer.aovs.add()
+            aov.name = name
+            aov.type = "VALUE"
     settings = scene.render.image_settings
     if hasattr(settings, "media_type"):
         settings.media_type = "MULTI_LAYER_IMAGE"
@@ -228,13 +230,16 @@ class Renderer:
         if rgba is None:
             raise RuntimeError("The render has no Combined pass")
         position = _pass(channels, name, "Position", "XYZ")
-        remap = _pass(channels, name, REMAP_AOV, "X")
+        coverages = [_pass(channels, name, aov, "X") for aov in REMAP_AOVS.values()]
+        remap = None
+        if all(c is not None for c in coverages):
+            remap = np.stack([c[..., 0] for c in coverages], axis=-1)
         # EXR rows are stored top to bottom, which is screen order already.
         return RenderResult(
             bounds,
             rgba,
             position,
-            None if remap is None else remap[..., 0],
+            remap,
         )
 
 

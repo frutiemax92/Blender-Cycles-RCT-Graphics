@@ -1,7 +1,7 @@
 """Recolourable (remap) materials.
 
-A material becomes recolourable by writing its remap number (1-3) into the
-``rct_remap`` AOV. Pixels showing it are quantized into the matching remap
+A material becomes recolourable by writing 1 into the AOV of its remap
+(``rct_remap_1`` to ``rct_remap_3``). Pixels showing it are quantized into the matching remap
 ramp of the palette, by brightness only, so the material's own colour does
 not matter; the add-on gives new remap materials the ramp's own colour to
 make the viewport preview meaningful.
@@ -11,7 +11,7 @@ import bpy
 from bpy.props import IntProperty
 
 from .core import palette
-from .render import REMAP_AOV
+from .render import REMAP_AOVS
 
 AOV_NODE_NAME = "RCT Remap AOV"
 
@@ -39,7 +39,10 @@ def get_remap(material):
     node = material.node_tree.nodes.get(AOV_NODE_NAME)
     if node is None:
         return 0
-    return int(round(node.inputs["Value"].default_value))
+    for remap, name in REMAP_AOVS.items():
+        if node.aov_name == name:
+            return remap
+    return 0
 
 
 def _ensure_node_tree(material):
@@ -64,8 +67,8 @@ def set_remap(material, remap):
         output = next((n for n in nodes if n.type == "OUTPUT_MATERIAL"), None)
         if output is not None:
             node.location = (output.location.x, output.location.y - 160)
-    node.aov_name = REMAP_AOV
-    node.inputs["Value"].default_value = float(remap)
+    node.aov_name = REMAP_AOVS[remap]
+    node.inputs["Value"].default_value = 1.0
 
 
 def new_remap_material(remap):

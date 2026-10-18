@@ -70,10 +70,15 @@ class RemapTests(unittest.TestCase):
         self.assertTrue(set(out[:, 2:].ravel()) <= set(palette.REMAP_RANGES[2]))
         self.assertFalse(set(out[:, :2].ravel()) & set(palette.REMAP_RANGES[2]))
 
-    def test_remap_classes_from_premultiplied_aov(self):
-        alpha = np.array([[1.0, 0.5, 0.0]])
-        aov = np.array([[2.0, 1.0, 0.0]])
-        np.testing.assert_array_equal(postprocess.remap_classes(aov, alpha), [[2, 2, 0]])
+    def test_remap_classes_from_coverage(self):
+        alpha = np.array([[1.0, 0.5, 1.0, 1.0]])
+        coverage = np.array([[[0, 1, 0], [0, 0.4, 0], [0.5, 0, 0.5], [0.1, 0, 0.2]]], dtype=float)
+        # Mixing remap 1 and 3 never yields remap 2.
+        classes = postprocess.remap_classes(coverage, alpha)
+        self.assertEqual(classes[0, 0], 2)
+        self.assertEqual(classes[0, 1], 2)
+        self.assertIn(classes[0, 2], (1, 3))
+        self.assertEqual(classes[0, 3], 0)
 
 
 class OutlineTests(unittest.TestCase):

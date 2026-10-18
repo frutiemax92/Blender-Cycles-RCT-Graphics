@@ -290,9 +290,7 @@ class TreeTests(unittest.TestCase):
 
     def test_terrain_preview(self):
         self.add()
-        with self.assertRaisesRegex(RuntimeError, "Render the sprites first"):
-            bpy.ops.rct_graphics.terrain_preview(scale=1)
-        self.render()
+        # The button renders the sprites first.
         self.assertEqual(bpy.ops.rct_graphics.terrain_preview(margin=1, scale=1), {"FINISHED"})
         indices, _ = png.read_indexed(os.path.join(self.out, "images", "0000.png"))
         image = bpy.data.images["RCT Terrain Preview"]

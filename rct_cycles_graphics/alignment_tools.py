@@ -8,7 +8,7 @@ import numpy as np
 from bpy.props import BoolProperty, IntProperty
 from mathutils import Matrix
 
-from . import preferences, render
+from . import preferences, render, scene_setup
 from .core import alignment, export, g1, png, projection, rct2dat, terrain
 
 PREVIEW_FILE = "alignment_preview.png"
@@ -229,7 +229,7 @@ class RCT_OT_check_alignment(bpy.types.Operator):
 
 
 class RCT_OT_terrain_preview(bpy.types.Operator):
-    """Show the rendered sprites on the game's grass with gridlines, in all four views"""
+    """Render the sprites and show them on the game's grass with gridlines, in all four views"""
 
     bl_idname = "rct_graphics.terrain_preview"
     bl_label = "Preview on Grass"
@@ -249,8 +249,15 @@ class RCT_OT_terrain_preview(bpy.types.Operator):
         max=4,
     )
 
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
     def execute(self, context):
+        from .operators import render_sprites
+
         try:
+            message = render_sprites(context)
             path, from_game, missing = run_terrain_preview(context, self.margin, self.scale)
         except (OSError, ValueError) as error:
             self.report({"ERROR"}, str(error))
@@ -262,9 +269,9 @@ class RCT_OT_terrain_preview(bpy.types.Operator):
         if missing:
             problems.append("could not read {} from RCT2's ObjData".format(", ".join(missing)))
         if problems:
-            self.report({"WARNING"}, "; ".join(problems))
+            self.report({"WARNING"}, "; ".join([message] + problems))
         else:
-            self.report({"INFO"}, "Terrain preview written to " + path)
+            self.report({"INFO"}, message + "; terrain preview written to " + path)
         return {"FINISHED"}
 
 

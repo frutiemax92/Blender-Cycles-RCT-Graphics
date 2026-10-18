@@ -62,6 +62,7 @@ class RCT_PT_main(bpy.types.Panel):
             row.prop(props, "animation_frame_step")
 
         layout.operator("rct_graphics.render", icon="RENDER_STILL")
+        draw_terrain_preview(layout, props)
 
 
 class RCT_PT_render_settings(bpy.types.Panel):
@@ -277,7 +278,6 @@ class RCT_PT_tree(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("rct_graphics.tree_load_preset", icon="PRESET")
         row.operator("rct_graphics.tree_apply", icon="FREEZE")
-        draw_terrain_preview(layout, props)
 
 
 class RCT_PT_object(bpy.types.Panel):
@@ -340,7 +340,6 @@ class RCT_PT_alignment(bpy.types.Panel):
         row.operator("rct_graphics.snap_to_grid", icon="SNAP_GRID")
         row.operator("rct_graphics.check_alignment", icon="VIEWZOOM")
         layout.prop(props, "check_after_render")
-        draw_terrain_preview(layout, props)
         if props.alignment_report:
             box = layout.box()
             for line in props.alignment_report.split("\n"):

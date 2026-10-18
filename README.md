@@ -206,8 +206,8 @@ their cell. The add-on handles both:
 Horizontal findings only matter for objects meant to tile: a tree is not
 supposed to fill its tile.
 
-**Preview on Grass** (in the Alignment and Tree Generator panels) shows the
-rendered sprites as the game would: each of the four views stands on a patch
+**Preview on Grass** (just under **Render Sprites**) renders the sprites
+again and shows them as the game would: each of the four views stands on a patch
 of the game's grass with gridlines (`SPR_TERRAIN_GRASS_GRID` from `g1.dat`),
 with *Tiles Around* rings of tiles around the footprint, enlarged by *Zoom*.
 Up to four of RCT2's own trees (*Compare with RCT2 trees*, read from the
@@ -216,8 +216,7 @@ placed with the game's paint offsets, so the generated sprites can be
 compared with the originals in every view.
 The result opens as `terrain_preview.png` / the *RCT Terrain Preview* image
 (in a new window when no Image Editor is open). Without `g1.dat` a stand-in
-grass tile in the game's palette is used. It reads the sprites in the output
-folder, so render first.
+grass tile in the game's palette is used.
 
 ## Development
 

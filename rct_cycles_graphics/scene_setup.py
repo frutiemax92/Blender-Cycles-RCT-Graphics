@@ -198,9 +198,9 @@ def configure_render(scene):
         cycles.pixel_filter_type = "GAUSSIAN"
         cycles.filter_width = 0.01
     else:
+        # The box filter always spans exactly one pixel.
         cycles.samples = props.samples
         cycles.pixel_filter_type = "BOX"
-        cycles.filter_width = props.filter_width
     cycles.max_bounces = 4
     cycles.diffuse_bounces = 2
     cycles.glossy_bounces = 2

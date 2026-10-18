@@ -227,17 +227,6 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         default="3",
     )
 
-    filter_width: FloatProperty(
-        name="Filter Width",
-        description=(
-            "Pixel filter width used for anti-aliasing when supersampling is "
-            "off. 1.0 keeps the silhouette exact so adjacent tiles line up without gaps"
-        ),
-        default=1.0,
-        min=0.01,
-        max=3.0,
-    )
-
     cast_shadows: BoolProperty(
         name="Shadows",
         description="Let the sun lights cast shadows",

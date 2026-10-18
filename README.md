@@ -109,7 +109,7 @@ silhouette. This add-on reproduces that with Cycles:
   threshold** of opacity), so two adjacent tiles split boundary pixels
   between them exactly. Edges stay crisp and keep the object's own colour,
   with no dark or light fringe.
-- With supersampling **Off**, Cycles' box pixel filter (width 1.0 by default)
+- With supersampling **Off**, Cycles' box pixel filter (one pixel wide)
   anti-aliases everything, and pixels at least 50% covered become opaque.
   Edges between faces then blend.
 - **Blend Edges with Background** reproduces the dark fringe of RCT1-style

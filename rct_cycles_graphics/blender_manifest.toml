@@ -14,4 +14,4 @@ blender_version_min = "4.2.0"
 license = ["SPDX:MIT"]
 
 [permissions]
-files = "Writes rendered sprites, object.json and .parkobj files to the output folder"
+files = "Write sprites, object.json and .parkobj files"

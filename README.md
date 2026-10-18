@@ -97,13 +97,21 @@ AOV, so edges between two remap materials are never mistaken for a third.
 Blender Internal used to anti-alias only the inside of objects, leaving a hard
 silhouette. This add-on reproduces that with Cycles:
 
-- Cycles renders with a box pixel filter (width 1.0 by default), so faces and
-  textures are anti-aliased inside the object.
-- The silhouette is then cut with an **alpha threshold**: pixels at least 50%
-  covered become opaque using their un-premultiplied colour, and the rest
-  become transparent. Edges stay crisp and keep the object's own colour, with
-  no dark or light fringe. With a width-1 box filter, coverage is exact, so
-  two adjacent tiles split boundary pixels between them perfectly.
+- **Supersampling** (3x3 by default) renders every sprite pixel as point
+  samples on a grid of sub-pixels. A pixel takes the face under its centre
+  sub-pixel and averages only the sub-pixels on that same face (same flat
+  normal, same plane, same remap). Textures and shading are anti-aliased,
+  but edges between faces never mix two faces' colours. Mixed edge pixels
+  would otherwise show as dotted seams in game wherever one sprite overlaps
+  another, e.g. on stacked or repeated base blocks.
+- The silhouette follows the same centre sample, as a rasterizer would: a
+  pixel is opaque when its centre hits the object (with at least the **alpha
+  threshold** of opacity), so two adjacent tiles split boundary pixels
+  between them exactly. Edges stay crisp and keep the object's own colour,
+  with no dark or light fringe.
+- With supersampling **Off**, Cycles' box pixel filter (width 1.0 by default)
+  anti-aliases everything, and pixels at least 50% covered become opaque.
+  Edges between faces then blend.
 - **Blend Edges with Background** reproduces the dark fringe of RCT1-style
   graphics instead.
 - **Outline Darkening** darkens the sprite's rim by *N* shades along each

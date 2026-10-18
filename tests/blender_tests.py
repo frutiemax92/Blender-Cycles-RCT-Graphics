@@ -20,8 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 import rct_cycles_graphics as addon  # noqa: E402
-from rct_cycles_graphics import materials  # noqa: E402
-from rct_cycles_graphics.core import export, jobs, palette, projection  # noqa: E402
+from rct_cycles_graphics import materials, render  # noqa: E402
+from rct_cycles_graphics.core import export, jobs, palette, postprocess, projection  # noqa: E402
 
 
 def reset_scene():
@@ -132,6 +132,33 @@ class RenderTests(unittest.TestCase):
         self.render()
         bpy.ops.rct_graphics.check_alignment()
         self.assertNotIn("FIX", self.props.alignment_report)
+
+    def test_face_edges_do_not_blend(self):
+        # Edge pixels mixing two faces' colours show as seams in game once
+        # blocks are stacked: every pixel must take a single face's colour.
+        tile_box()
+        self.props.samples = 64
+        with render.Renderer(bpy.context) as renderer:
+            result = renderer.render(0, 1)
+        rgb = postprocess.unpremultiply(result.rgba)[result.opaque]
+        # The three visible faces are the three most common brightnesses.
+        lum = np.round(postprocess.luminance(rgb), 2)
+        values, counts = np.unique(lum, return_counts=True)
+        faces = np.array([np.median(rgb[lum == v], axis=0) for v in values[np.argsort(counts)[-3:]]])
+        distance = np.min(np.linalg.norm(rgb[:, None] - faces[None], axis=-1), axis=1)
+        # Noise stays within a few percent; blended edges are 50% off.
+        self.assertLess(distance.max() / np.linalg.norm(faces, axis=-1).min(), 0.15)
+
+    def test_stacked_blocks_fit_exactly(self):
+        box = tile_box()
+        low = self.render()
+        bpy.data.objects.remove(box)
+        tile_box(height=2 * projection.HEIGHT_STEP)
+        tall = self.render()
+        for view in range(4):
+            stacked = _paint({}, low[view], (0, 0))
+            _paint(stacked, low[view], (0, -16))
+            self.assertEqual(set(stacked), set(_paint({}, tall[view], (0, 0))), "view {}".format(view))
 
     def test_parkobj(self):
         tile_box()

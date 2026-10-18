@@ -203,17 +203,35 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
 
     samples: IntProperty(
         name="Samples",
-        description="Cycles samples per pixel. Sprites are tiny, so this is cheap",
+        description=(
+            "Cycles samples per sprite pixel (shared between its sub-pixels when "
+            "supersampling). Sprites are tiny, so this is cheap"
+        ),
         default=64,
         min=1,
         max=4096,
     )
 
+    supersampling: EnumProperty(
+        name="Supersampling",
+        description=(
+            "Anti-alias the inside of faces only: each pixel averages the "
+            "sub-pixels lying on the face under its centre, so edges between "
+            "faces stay hard and stacked or repeated objects show no seams"
+        ),
+        items=(
+            ("1", "Off", "Plain Cycles anti-aliasing with the pixel filter; face edges blend"),
+            ("3", "3x3", "9 sub-pixels per pixel"),
+            ("5", "5x5", "25 sub-pixels per pixel, for finely detailed textures"),
+        ),
+        default="3",
+    )
+
     filter_width: FloatProperty(
         name="Filter Width",
         description=(
-            "Pixel filter width used for interior anti-aliasing. 1.0 keeps the "
-            "silhouette exact so adjacent tiles line up without gaps"
+            "Pixel filter width used for anti-aliasing when supersampling is "
+            "off. 1.0 keeps the silhouette exact so adjacent tiles line up without gaps"
         ),
         default=1.0,
         min=0.01,

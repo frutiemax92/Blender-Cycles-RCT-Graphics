@@ -1,8 +1,16 @@
 """Turning a raw Cycles render into a palette sprite."""
 
+import math
+
 import numpy as np
 
-from . import palette, quantize
+from . import palette, projection, quantize
+
+#: Sub-pixels whose normals differ by more than this lie on different faces.
+SURFACE_NORMAL_COS = math.cos(math.radians(10.0))
+#: Sub-pixels further than this (Blender units, half a pixel) from the plane
+#: of the pixel's centre lie on a different (e.g. parallel, stepped) face.
+SURFACE_PLANE_TOLERANCE = 0.5 / projection.PIXELS_PER_BU
 
 
 def linear_to_srgb(linear):
@@ -51,6 +59,71 @@ def remap_classes(coverage, alpha):
     plain = alpha - coverage.sum(axis=-1)
     shares = np.concatenate([plain[..., None], coverage], axis=-1)
     return np.argmax(shares, axis=-1).astype(np.int32)
+
+
+def _blocks(array, factor):
+    """(H*f, W*f, C) array -> (H, W, f*f, C) array of each pixel's sub-pixels."""
+    height, width = array.shape[0] // factor, array.shape[1] // factor
+    channels = array.shape[2] if array.ndim == 3 else 1
+    blocks = array.reshape(height, factor, width, factor, channels).transpose(0, 2, 1, 3, 4)
+    return blocks.reshape(height, width, factor * factor, channels)
+
+
+def _normalized(vectors):
+    length = np.linalg.norm(vectors, axis=-1, keepdims=True)
+    return vectors / np.where(length > 1e-9, length, 1.0)
+
+
+def resolve_supersampled(rgba, position, normal, classes, factor, alpha_threshold):
+    """Downsample a point-sampled render of ``factor`` x ``factor`` sub-pixels per pixel.
+
+    Anti-aliases the inside of faces only, like Blender Internal did: a pixel
+    takes the face under its centre sub-pixel and averages the sub-pixels on
+    that same face (same normal, same plane, same remap). Face edges hence
+    never mix two faces' colours, which would show as seams once sprites are
+    stacked or repeated in game, while textures stay smooth.
+
+    rgba: (H*f, W*f, 4) premultiplied render; position, normal: (H*f, W*f, 3)
+    world-space passes (coverage weighted); classes: (H*f, W*f) remap numbers.
+    ``factor`` must be odd, so a sub-pixel sits on the pixel centre: a pixel
+    is opaque when that sample hits the object, as a rasterizer would decide,
+    so adjacent tiles split boundary pixels between them exactly.
+
+    Returns (rgba, position, classes, opaque) at pixel resolution. The rgba
+    alpha is the pixel's coverage (used to blend edges with a background) and
+    its colour is the centre face's, premultiplied; position is the centre
+    sample's, premultiplied by the same alpha.
+    """
+    rgba_s = _blocks(rgba, factor)
+    alpha_s = rgba_s[..., 3]
+    safe = np.where(alpha_s > 1e-6, alpha_s, 1.0)[..., None]
+    position_s = _blocks(position, factor) / safe
+    normal_s = _normalized(_blocks(normal, factor))
+    classes_s = _blocks(classes, factor)[..., 0]
+
+    centre = (factor // 2) * factor + factor // 2
+    alpha_c = alpha_s[..., centre]
+    position_c = position_s[:, :, centre : centre + 1]
+    normal_c = normal_s[:, :, centre : centre + 1]
+    same = (
+        (alpha_s > 1e-6)
+        & (classes_s == classes_s[..., centre : centre + 1])
+        & (np.sum(normal_s * normal_c, axis=-1) >= SURFACE_NORMAL_COS)
+        & (np.abs(np.sum((position_s - position_c) * normal_c, axis=-1)) <= SURFACE_PLANE_TOLERANCE)
+    )
+    weight = np.sum(np.where(same, alpha_s, 0.0), axis=-1)
+    colour = np.sum(np.where(same[..., None], rgba_s[..., :3], 0.0), axis=2)
+    colour /= np.where(weight > 1e-6, weight, 1.0)[..., None]
+
+    coverage = alpha_s.mean(axis=-1)
+    opaque = alpha_c >= alpha_threshold
+    out = np.concatenate([colour * coverage[..., None], coverage[..., None]], axis=-1)
+    return (
+        out.astype(np.float32),
+        (position_c[:, :, 0] * coverage[..., None]).astype(np.float32),
+        np.where(opaque, classes_s[..., centre], 0).astype(np.int32),
+        opaque,
+    )
 
 
 def bounding_box(mask):
@@ -119,16 +192,21 @@ def apply_outline(indices, settings):
     return result
 
 
-def to_indices(rgba_linear, settings, remap=None, mask=None):
+def to_indices(rgba_linear, settings, remap=None, mask=None, opaque=None):
     """Quantize a premultiplied linear RGBA render to palette indices.
 
     remap: optional (H, W) int array with the recolour number (0-3) per pixel.
     mask: optional (H, W) bool array restricting the opaque pixels further
     (used to split large scenery into tiles).
+    opaque: optional (H, W) bool silhouette replacing the alpha threshold
+    (see resolve_supersampled).
     Returns an (H, W) uint8 array, 0 being transparent.
     """
     alpha = rgba_linear[..., 3]
-    opaque = silhouette(alpha, settings.alpha_threshold)
+    if opaque is None:
+        opaque = silhouette(alpha, settings.alpha_threshold)
+    else:
+        opaque = opaque.copy()
     if mask is not None:
         opaque &= mask
     if settings.background_blend:

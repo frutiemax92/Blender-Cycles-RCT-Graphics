@@ -171,6 +171,11 @@ def build_tile_grid(scene, width, length, wall=False):
     return grid
 
 
+def supersampling_factor(props):
+    """Sub-pixels per pixel side (1 when supersampling is off)."""
+    return int(props.supersampling)
+
+
 def configure_render(scene):
     """Cycles settings giving flat, crisp, palette friendly renders."""
     props = scene.rct_graphics
@@ -182,11 +187,20 @@ def configure_render(scene):
     render.dither_intensity = 0.0
 
     cycles = scene.cycles
-    cycles.samples = props.samples
+    factor = supersampling_factor(props)
     cycles.use_adaptive_sampling = False
     cycles.use_denoising = False
-    cycles.pixel_filter_type = "BOX"
-    cycles.filter_width = props.filter_width
+    if factor > 1:
+        # Point samples at sub-pixel centres: anti-aliasing comes from
+        # averaging sub-pixels of the same face (see render.py). Cycles
+        # ignores the width of the box filter, hence a narrow Gaussian.
+        cycles.samples = max(1, round(props.samples / factor**2))
+        cycles.pixel_filter_type = "GAUSSIAN"
+        cycles.filter_width = 0.01
+    else:
+        cycles.samples = props.samples
+        cycles.pixel_filter_type = "BOX"
+        cycles.filter_width = props.filter_width
     cycles.max_bounces = 4
     cycles.diffuse_bounces = 2
     cycles.glossy_bounces = 2

@@ -74,7 +74,10 @@ class RCT_PT_render_settings(bpy.types.Panel):
 
         col = layout.column(heading="Cycles")
         col.prop(props, "samples")
-        col.prop(props, "filter_width")
+        col.prop(props, "supersampling")
+        sub = col.column()
+        sub.active = props.supersampling == "1"
+        sub.prop(props, "filter_width")
         col.prop(props, "cast_shadows")
 
         col = layout.column(heading="Lighting")

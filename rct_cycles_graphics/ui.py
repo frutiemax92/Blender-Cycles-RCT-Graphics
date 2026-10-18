@@ -18,6 +18,48 @@ def draw_terrain_preview(layout, props):
         grid.prop(props, "compare_tree_{}".format(slot), text="")
 
 
+def draw_render_settings(layout, props):
+    """The collapsible Render & Colour section, drawn above the Render button."""
+    header, layout = layout.panel("RCT_PT_render_settings", default_closed=True)
+    header.label(text="Render & Colour")
+    if layout is None:
+        return
+    layout.use_property_split = True
+    layout.use_property_decorate = False
+
+    col = layout.column(heading="Cycles")
+    col.prop(props, "samples")
+    col.prop(props, "supersampling")
+    col.prop(props, "cast_shadows")
+
+    col = layout.column(heading="Lighting")
+    col.prop(props, "main_light_strength")
+    col.prop(props, "fill_light_strength")
+    col.prop(props, "ambient_strength")
+
+    col = layout.column(heading="Silhouette")
+    col.prop(props, "alpha_threshold")
+    col.prop(props, "background_blend")
+
+    col = layout.column(heading="Outline")
+    col.prop(props, "outline_shades")
+    sub = col.column()
+    sub.active = props.outline_shades > 0
+    sub.prop(props, "outline_width")
+    sub.prop(props, "outline_diagonal")
+
+    col = layout.column(heading="Palette")
+    col.prop(props, "palette_mode")
+    if props.palette_mode == "CUSTOM":
+        grid = col.grid_flow(columns=2, even_columns=True, align=True)
+        for i, (_, title) in enumerate(RAMP_TITLES):
+            grid.prop(props, "palette_ramps", index=i, text=title, toggle=True)
+    col.prop(props, "dither_method")
+    sub = col.column()
+    sub.active = props.dither_method != "NONE"
+    sub.prop(props, "dither_strength")
+
+
 class RCT_PT_main(bpy.types.Panel):
     bl_label = "RCT Graphics"
     bl_idname = "RCT_PT_main"
@@ -61,60 +103,9 @@ class RCT_PT_main(bpy.types.Panel):
             row.prop(props, "animation_first_frame")
             row.prop(props, "animation_frame_step")
 
+        draw_render_settings(layout, props)
         layout.operator("rct_graphics.render", icon="RENDER_STILL")
         draw_terrain_preview(layout, props)
-
-
-class RCT_PT_render_settings(bpy.types.Panel):
-    bl_label = "Render & Colour"
-    bl_idname = "RCT_PT_render_settings"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "RCT"
-    bl_parent_id = "RCT_PT_main"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    @classmethod
-    def poll(cls, context):
-        return scene_setup.get_rig(context.scene)[0] is not None
-
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.rct_graphics
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        col = layout.column(heading="Cycles")
-        col.prop(props, "samples")
-        col.prop(props, "supersampling")
-        col.prop(props, "cast_shadows")
-
-        col = layout.column(heading="Lighting")
-        col.prop(props, "main_light_strength")
-        col.prop(props, "fill_light_strength")
-        col.prop(props, "ambient_strength")
-
-        col = layout.column(heading="Silhouette")
-        col.prop(props, "alpha_threshold")
-        col.prop(props, "background_blend")
-
-        col = layout.column(heading="Outline")
-        col.prop(props, "outline_shades")
-        sub = col.column()
-        sub.active = props.outline_shades > 0
-        sub.prop(props, "outline_width")
-        sub.prop(props, "outline_diagonal")
-
-        col = layout.column(heading="Palette")
-        col.prop(props, "palette_mode")
-        if props.palette_mode == "CUSTOM":
-            grid = col.grid_flow(columns=2, even_columns=True, align=True)
-            for i, (_, title) in enumerate(RAMP_TITLES):
-                grid.prop(props, "palette_ramps", index=i, text=title, toggle=True)
-        col.prop(props, "dither_method")
-        sub = col.column()
-        sub.active = props.dither_method != "NONE"
-        sub.prop(props, "dither_strength")
 
 
 class RCT_PT_materials(bpy.types.Panel):
@@ -347,7 +338,7 @@ class RCT_PT_alignment(bpy.types.Panel):
                 box.label(text=line[4:] if line[:4] in ("FIX ", "OK  ") else line, icon=icon)
 
 
-classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_tree, RCT_PT_alignment, RCT_PT_object, RCT_PT_render_settings)
+classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_tree, RCT_PT_alignment, RCT_PT_object)
 
 
 def register():

@@ -142,7 +142,33 @@ class RCT_PT_materials(bpy.types.Panel):
                 op.remap = remap
 
 
-classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_render_settings)
+class RCT_PT_alignment(bpy.types.Panel):
+    bl_label = "Alignment"
+    bl_idname = "RCT_PT_alignment"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RCT"
+    bl_parent_id = "RCT_PT_main"
+
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.rct_graphics
+        row = layout.row(align=True)
+        row.operator("rct_graphics.snap_to_grid", icon="SNAP_GRID")
+        row.operator("rct_graphics.check_alignment", icon="VIEWZOOM")
+        layout.prop(props, "check_after_render")
+        if props.alignment_report:
+            box = layout.box()
+            for line in props.alignment_report.split("\n"):
+                icon = "ERROR" if line.startswith("FIX") else "CHECKMARK" if line.startswith("OK") else "INFO"
+                box.label(text=line[4:] if line[:4] in ("FIX ", "OK  ") else line, icon=icon)
+
+
+classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_alignment, RCT_PT_render_settings)
 
 
 def register():

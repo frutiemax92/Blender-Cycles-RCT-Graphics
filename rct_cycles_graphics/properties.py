@@ -110,6 +110,18 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         min=1,
     )
 
+    check_after_render: BoolProperty(
+        name="Check Alignment After Render",
+        description="Run the alignment check and refresh the tiling preview after every render",
+        default=True,
+    )
+
+    alignment_report: StringProperty(
+        name="Alignment Report",
+        description="Result of the last alignment check",
+        default="",
+    )
+
     # Rendering -----------------------------------------------------------
 
     samples: IntProperty(

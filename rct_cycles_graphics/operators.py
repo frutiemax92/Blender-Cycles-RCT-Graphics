@@ -89,7 +89,18 @@ class RCT_OT_render(bpy.types.Operator):
             window_manager.progress_end()
 
         export.write_sprites(directory, sprites)
-        self.report({"INFO"}, "Rendered {} sprites to {}".format(len(sprites), directory))
+        message = "Rendered {} sprites to {}".format(len(sprites), directory)
+        if props.check_after_render:
+            from . import alignment_tools
+
+            lines, path = alignment_tools.run_check(context)
+            alignment_tools.store_report(context.scene, lines)
+            if path is not None:
+                alignment_tools.show_preview(context, path)
+            problems = sum(1 for line in lines if line.startswith("FIX"))
+            if problems:
+                message += "; {} alignment problem(s), see the RCT panel".format(problems)
+        self.report({"INFO"}, message)
         return {"FINISHED"}
 
 

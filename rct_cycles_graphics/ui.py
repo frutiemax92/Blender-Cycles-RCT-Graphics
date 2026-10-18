@@ -1,7 +1,10 @@
 import bpy
 
 from . import materials, scene_setup
+from .core.jobs import SMALL_SCENERY_SHAPES
+from .core.objectjson import OBJECT_FLAGS
 from .core.palette import RAMP_TITLES
+from .properties import flag_property
 
 
 class RCT_PT_main(bpy.types.Panel):
@@ -174,6 +177,16 @@ class RCT_PT_object(bpy.types.Panel):
         layout.prop(props, "scenery_group")
         if props.object_type == "SMALL" and props.animation_frames > 1:
             layout.prop(props, "animation_delay")
+
+        col = layout.column()
+        col.label(text="Flags:")
+        forced = SMALL_SCENERY_SHAPES[props.small_shape]["flags"] if props.object_type == "SMALL" else {}
+        grid = col.grid_flow(columns=2, even_columns=True)
+        for key, _, _, _ in OBJECT_FLAGS[props.object_type]:
+            cell = grid.row()
+            # Flags implied by the shape are always written.
+            cell.enabled = key not in forced
+            cell.prop(props, flag_property(props.object_type, key))
         layout.prop(props, "build_parkobj")
         layout.prop(props, "copy_to_openrct2")
         layout.operator("rct_graphics.export_parkobj", icon="PACKAGE")

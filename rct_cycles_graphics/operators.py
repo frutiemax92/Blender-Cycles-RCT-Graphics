@@ -4,7 +4,7 @@ import shutil
 import bpy
 
 from . import preferences, render, scene_setup
-from .properties import selected_ramps
+from .properties import flag_property, selected_ramps
 from .core import alignment, export, jobs, objectjson, postprocess
 
 
@@ -130,6 +130,10 @@ def object_info(context, directory):
     info.footprint = footprint(props)
     info.wall_double_sided = props.wall_double_sided
     info.wall_sloped = props.wall_sloped
+    info.flags = {
+        key: getattr(props, flag_property(props.object_type, key))
+        for key, _, _, _ in objectjson.OBJECT_FLAGS[props.object_type]
+    }
     info.remaps = objectjson.used_remaps(directory)
     points = render.scene_bounds_points(context.scene, context.view_layer)
     if len(points):

@@ -12,6 +12,72 @@ OBJECT_TYPES = {"SMALL": "scenery_small", "LARGE": "scenery_large", "WALL": "sce
 
 _REMAP_FLAGS = {1: "hasPrimaryColour", 2: "hasSecondaryColour", 3: "hasTertiaryColour"}
 
+# Boolean object.json flags offered as checkboxes, per object type, as
+# (JSON key, label, description, default). They come from the ReadJson
+# methods of SmallSceneryObject, LargeSceneryObject and WallObject in
+# OpenRCT2. Flags that need extra sprites (canWither, hasGlass, doors,
+# fountains, clocks, ...) or are computed by the add-on (colours, animation,
+# shape) are left out. Large scenery tile flags are applied to every tile.
+OBJECT_FLAGS = {
+    "SMALL": (
+        (
+            "isStackable",
+            "Stackable",
+            "Can be raised with Shift and stacked on other objects or built over water "
+            "(SmallSceneryPlaceAction rejects raised placement without it)",
+            True,
+        ),
+        ("isRotatable", "Rotatable", "Can be rotated before placing", True),
+        ("requiresFlatSurface", "Requires Flat Surface", "Cannot be placed on sloped land", False),
+        ("prohibitWalls", "Prohibit Walls", "Walls cannot be built on the same tile", False),
+        ("hasNoSupports", "No Supports", "Never draw wooden supports below the raised object", False),
+        (
+            "allowSupportsAbove",
+            "Allow Supports Above",
+            "Paths and track supports may be built on top of the object",
+            False,
+        ),
+        (
+            "supportsHavePrimaryColour",
+            "Coloured Supports",
+            "Draw the supports in the object's primary colour",
+            False,
+        ),
+        (
+            "isTree",
+            "Tree",
+            "Treated as a tree: protected by the no tree removal rule, exempt from the height limit",
+            False,
+        ),
+        ("canBeWatered", "Can Be Watered", "Handymen water it", False),
+    ),
+    "LARGE": (
+        ("hasSupports", "Supports", "Draw wooden supports below the raised object (all tiles)", False),
+        (
+            "allowSupportsAbove",
+            "Allow Supports Above",
+            "Paths and track supports may be built on top of the object (all tiles)",
+            False,
+        ),
+        ("isPhotogenic", "Photogenic", "Guests take pictures of it", False),
+        (
+            "isTree",
+            "Tree",
+            "Treated as a tree: protected by the no tree removal rule, exempt from the height limit",
+            False,
+        ),
+    ),
+    "WALL": (
+        ("isTransparent", "Transparent", "Guests can see through it, for the scenery rating", False),
+    ),
+}
+
+_TILE_FLAGS = {"hasSupports", "allowSupportsAbove"}
+
+
+def default_flags(object_type):
+    return {key: default for key, _, _, default in OBJECT_FLAGS[object_type]}
+
 
 def used_remaps(output_dir):
     """Remap numbers (1-3) present in the rendered sprites."""
@@ -44,6 +110,7 @@ class ObjectInfo:
         self.wall_double_sided = False
         self.wall_sloped = True
         self.scenery_group = ""
+        self.flags = default_flags(object_type)
 
 
 def properties_for(info):
@@ -51,6 +118,12 @@ def properties_for(info):
     props = {"price": info.price}
     for remap in sorted(info.remaps):
         props[_REMAP_FLAGS[remap]] = True
+    # Every exposed flag is written, false ones too, so unticking a box
+    # also clears it from an existing object.json on re-export.
+    flags = default_flags(info.object_type)
+    flags.update((key, bool(value)) for key, value in info.flags.items() if key in flags)
+    tile_flags = {key: flags.pop(key) for key in _TILE_FLAGS & set(flags)} if info.object_type == "LARGE" else {}
+    props.update(flags)
 
     if info.object_type == "SMALL":
         shape = jobs.SMALL_SCENERY_SHAPES[info.shape]
@@ -58,7 +131,6 @@ def properties_for(info):
         props["cursor"] = "CURSOR_STATUE_DOWN"
         props["height"] = int(info.clearance)
         props["shape"] = shape["shape"]
-        props["isRotatable"] = True
         props.update(shape["flags"])
         if info.frames > 1:
             mask = 1
@@ -74,7 +146,7 @@ def properties_for(info):
         props["removalPrice"] = info.removal_price
         props["cursor"] = "CURSOR_STATUE_DOWN"
         props["tiles"] = [
-            {"x": tile["x"], "y": tile["y"], "z": 0, "clearance": int(info.clearance), "hasSupports": False}
+            {"x": tile["x"], "y": tile["y"], "z": 0, "clearance": int(info.clearance), **tile_flags}
             for tile in jobs.large_scenery_tiles(*info.footprint)
         ]
     elif info.object_type == "WALL":

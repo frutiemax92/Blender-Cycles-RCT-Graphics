@@ -144,6 +144,12 @@ class RenderTests(unittest.TestCase):
             self.assertIn("images/0003.png", archive.namelist())
         self.assertEqual(data["properties"]["height"], 16)
         self.assertEqual(len(data["images"]), 4)
+        self.assertIs(data["properties"]["isStackable"], True)
+        self.props.flag_small_isStackable = False
+        bpy.ops.rct_graphics.export_parkobj()
+        with zipfile.ZipFile(path) as archive:
+            data = json.loads(archive.read("object.json"))
+        self.assertIs(data["properties"]["isStackable"], False)
 
 
 def _paint(store, sprite, top):

@@ -23,6 +23,40 @@ class ObjectJsonTests(unittest.TestCase):
         self.assertTrue(props["hasPrimaryColour"] and props["hasSecondaryColour"])
         self.assertNotIn("hasTertiaryColour", props)
 
+    def test_small_scenery_is_stackable_by_default(self):
+        props = objectjson.properties_for(objectjson.ObjectInfo("a.b.c", "A", [], "SMALL"))
+        self.assertIs(props["isStackable"], True)
+        self.assertIs(props["isRotatable"], True)
+        self.assertIs(props["prohibitWalls"], False)
+
+    def test_flags_follow_the_object_type(self):
+        info = objectjson.ObjectInfo("a.b.c", "A", [], "SMALL")
+        info.flags["isStackable"] = False
+        info.flags["isTree"] = True
+        info.shape = "FULL_CENTRED_NO_WALLS"
+        props = objectjson.properties_for(info)
+        self.assertIs(props["isStackable"], False)
+        self.assertIs(props["isTree"], True)
+        self.assertIs(props["prohibitWalls"], True)
+
+        info = objectjson.ObjectInfo("a.b.c", "A", [], "LARGE")
+        info.flags.update(hasSupports=True, isPhotogenic=True)
+        props = objectjson.properties_for(info)
+        self.assertIs(props["isPhotogenic"], True)
+        self.assertNotIn("hasSupports", props)
+        self.assertNotIn("isStackable", props)
+        self.assertTrue(all(t["hasSupports"] and not t["allowSupportsAbove"] for t in props["tiles"]))
+
+        info = objectjson.ObjectInfo("a.b.c", "A", [], "WALL")
+        info.flags["isTransparent"] = True
+        self.assertIs(objectjson.properties_for(info)["isTransparent"], True)
+
+    def test_unticked_flag_clears_existing_object_json(self):
+        info = objectjson.ObjectInfo("a.b.c", "A", [], "SMALL")
+        info.flags["isTree"] = False
+        data = objectjson.build_object(info, [], {"properties": {"isTree": True}})
+        self.assertIs(data["properties"]["isTree"], False)
+
     def test_animation_frame_offsets_cover_the_mask(self):
         info = objectjson.ObjectInfo("a.b.c", "A", [], "SMALL")
         info.frames = 3
@@ -42,10 +76,10 @@ class ObjectJsonTests(unittest.TestCase):
 
     def test_existing_fields_survive(self):
         info = objectjson.ObjectInfo("a.b.c", "Name", ["Me"], "SMALL")
-        existing = {"id": "old", "properties": {"isTree": True, "price": 99}, "strings": {"name": {"fr-FR": "Nom"}}}
+        existing = {"id": "old", "properties": {"canWither": True, "price": 99}, "strings": {"name": {"fr-FR": "Nom"}}}
         data = objectjson.build_object(info, ["x"], existing)
         self.assertEqual(data["id"], "a.b.c")
-        self.assertTrue(data["properties"]["isTree"])
+        self.assertTrue(data["properties"]["canWither"])
         self.assertEqual(data["properties"]["price"], 10)
         self.assertEqual(data["strings"]["name"], {"fr-FR": "Nom", "en-GB": "Name"})
 

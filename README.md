@@ -69,6 +69,19 @@ orientation (0 and 1). *Sloped* adds images 2-5, rendered with a temporary
 shear of one land step. *Double Sided* adds images 6-11 with the back face for
 the near edges.
 
+**Flags.** The *Object Export* panel shows checkboxes for the `object.json`
+flags of the selected type, taken from OpenRCT2's object readers. Small
+scenery is *Stackable* (`isStackable`) and *Rotatable* by default; without
+`isStackable` the game refuses to raise the object with Shift or stack it.
+The other options are *Requires Flat Surface*, *Prohibit Walls*, *No
+Supports*, *Allow Supports Above*, *Coloured Supports*, *Tree* and *Can Be
+Watered*. Large scenery has *Supports* and *Allow Supports Above* (applied to
+every tile), *Photogenic* and *Tree*; walls have *Transparent*. Every flag is
+written, unticked ones as `false`, so unticking a box also clears the flag in
+an existing `object.json`. Flags that need extra sprites (withering, glass,
+doors, fountains, ...) are not offered; add them by hand to `object.json` and
+they survive re-exports.
+
 ## Recolourable materials
 
 In the *Recolourable Materials* panel, add a Remap 1/2/3 material or turn the

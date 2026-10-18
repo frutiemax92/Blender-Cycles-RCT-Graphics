@@ -9,6 +9,7 @@ from bpy.props import (
     StringProperty,
 )
 
+from .core.objectjson import OBJECT_FLAGS
 from .core.palette import RAMP_TITLES
 
 
@@ -31,6 +32,11 @@ def selected_ramps(props):
         return ["grey"]
     ramps = [name for (name, _), used in zip(RAMP_TITLES, props.palette_ramps) if used]
     return ramps or ["grey"]
+
+
+def flag_property(object_type, key):
+    """Name of the checkbox holding an object.json flag of ``object_type``."""
+    return "flag_{}_{}".format(object_type.lower(), key)
 
 
 class RCTGraphicsProperties(bpy.types.PropertyGroup):
@@ -337,6 +343,16 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         subtype="FACTOR",
     )
 
+
+# One checkbox per object.json flag, generated from the table shared with
+# the exporter.
+for _object_type, _flags in OBJECT_FLAGS.items():
+    for _key, _label, _description, _default in _flags:
+        RCTGraphicsProperties.__annotations__[flag_property(_object_type, _key)] = BoolProperty(
+            name=_label,
+            description="{} ({})".format(_description, _key),
+            default=_default,
+        )
 
 classes = (RCTGraphicsProperties,)
 

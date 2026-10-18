@@ -1,6 +1,7 @@
 import bpy
 
-from . import materials, scene_setup
+from . import materials, scene_setup, tree_generator
+from .core import alignment, tree
 from .core.jobs import SMALL_SCENERY_SHAPES
 from .core.objectjson import OBJECT_FLAGS
 from .core.palette import RAMP_TITLES
@@ -151,6 +152,123 @@ class RCT_PT_materials(bpy.types.Panel):
                 op.remap = remap
 
 
+def _tree_param_active(settings, name):
+    """Whether a tree setting has an effect with the current choices."""
+    style = settings.canopy_style
+    blobs = style not in ("TOPIARY", "NONE")
+    conditions = {
+        "large_width": settings.size == "LARGE",
+        "large_length": settings.size == "LARGE",
+        "bend_frequency": settings.straightness < 1.0,
+        "fork_height": settings.fork_count > 1,
+        "fork_angle": settings.fork_count > 1,
+        "whorl_size": settings.branch_spread == "WHORLED",
+        "sub_branch_length": settings.sub_branches > 0,
+        "canopy_shape": style != "NONE",
+        "clump_size": blobs,
+        "clump_size_variation": blobs,
+        "clump_count": style in ("BLOBS", "LAYERS", "STRANDS"),
+        "clumps_per_tip": style in ("BLOBS", "LAYERS", "COLUMN", "STRANDS"),
+        "clump_flatten": blobs,
+        "blob_merge": blobs,
+        "droop": blobs,
+        "hollow": blobs and style != "COLUMN",
+        "lumpiness": style != "NONE",
+        "lump_scale": style != "NONE",
+        "raggedness": style != "NONE",
+        "resolution": style != "NONE",
+        "accent_amount": settings.accent_mode != "NONE",
+        "accent_size": settings.accent_mode == "DOTS",
+        "accent_threshold": settings.accent_mode == "TOP_FACING",
+        "base_radius": settings.base_style != "NONE",
+        "base_height": settings.base_style != "NONE",
+    }
+    return conditions.get(name, True)
+
+
+class RCT_PT_tree(bpy.types.Panel):
+    bl_label = "Tree Generator"
+    bl_idname = "RCT_PT_tree"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RCT"
+    bl_parent_id = "RCT_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        row = layout.row(align=True)
+        row.prop(scene, "rct_tree_preset", text="")
+        row.operator("rct_graphics.tree_add", icon="ADD")
+
+        obj = tree_generator.active_tree(context)
+        if obj is None:
+            layout.label(text="Select a generated tree to edit it", icon="INFO")
+            return
+        settings = obj.rct_tree
+        props = scene.rct_graphics
+
+        row = layout.row(align=True)
+        row.prop(settings, "seed")
+        row.operator("rct_graphics.tree_randomize", text="", icon="FILE_REFRESH")
+        row = layout.row(align=True)
+        row.prop(settings, "auto_update")
+        row.operator("rct_graphics.tree_regenerate", icon="MOD_BUILD")
+
+        for title, params in tree.GROUPS:
+            header, body = layout.panel("rct_tree_" + title.lower().replace(" ", "_"), default_closed=True)
+            header.label(text=title)
+            if body is None:
+                continue
+            body.use_property_split = True
+            body.use_property_decorate = False
+            for param in params:
+                col = body.column()
+                col.active = _tree_param_active(settings, param.name)
+                if param.name == "height":
+                    col.prop(settings, "height_display")
+                    col.prop(settings, "height_unit")
+                else:
+                    col.prop(settings, param.name)
+
+        header, body = layout.panel("rct_tree_materials", default_closed=False)
+        header.label(text="Materials")
+        if body is not None:
+            for key, role in zip(tree_generator.ROLE_KEYS, tree.ROLES):
+                col = body.column(align=True)
+                col.prop(settings, "material_" + key, text=role)
+                sub = col.row()
+                sub.active = getattr(settings, "material_" + key) is not None
+                sub.prop(settings, "colour_" + key, text="Colour")
+            body.operator("rct_graphics.tree_make_unique", icon="DUPLICATE")
+
+        box = layout.box()
+        clearance = alignment.clearance_from_height(settings.stat_top) / alignment.CLEARANCE_UNIT
+        fits = "fits footprint" if settings.stat_fits else "wider than footprint"
+        box.label(
+            text="{:,} faces · {:g} clearance units · {}".format(settings.stat_faces, clearance, fits).replace(",", " "),
+            icon="CHECKMARK" if settings.stat_fits else "INFO",
+        )
+        for line in filter(None, settings.warnings.split("\n")):
+            box.label(text=line, icon="INFO" if line.startswith(tree.NOTE) else "ERROR")
+        if not tree_generator.matches_scene(settings, props):
+            row = box.row()
+            row.label(text="Scene is not " + tree_generator.size_description(settings), icon="ERROR")
+            row.operator("rct_graphics.tree_match_scene")
+        if tree_generator.look_differs(settings, props):
+            box.operator("rct_graphics.tree_use_look", icon="SHADING_RENDERED")
+        box.label(text="Regenerating replaces manual mesh edits", icon="INFO")
+
+        row = layout.row(align=True)
+        row.operator("rct_graphics.tree_load_preset", icon="PRESET")
+        row.operator("rct_graphics.tree_apply", icon="FREEZE")
+
+
 class RCT_PT_object(bpy.types.Panel):
     bl_label = "Object Export"
     bl_idname = "RCT_PT_object"
@@ -218,7 +336,7 @@ class RCT_PT_alignment(bpy.types.Panel):
                 box.label(text=line[4:] if line[:4] in ("FIX ", "OK  ") else line, icon=icon)
 
 
-classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_alignment, RCT_PT_object, RCT_PT_render_settings)
+classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_tree, RCT_PT_alignment, RCT_PT_object, RCT_PT_render_settings)
 
 
 def register():

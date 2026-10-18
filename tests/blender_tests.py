@@ -20,8 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 import rct_cycles_graphics as addon  # noqa: E402
-from rct_cycles_graphics import materials, render  # noqa: E402
-from rct_cycles_graphics.core import export, jobs, palette, postprocess, projection  # noqa: E402
+from rct_cycles_graphics import materials, render, tree_generator  # noqa: E402
+from rct_cycles_graphics.core import export, jobs, palette, postprocess, projection, tree  # noqa: E402
 
 
 def reset_scene():
@@ -177,6 +177,139 @@ class RenderTests(unittest.TestCase):
         with zipfile.ZipFile(path) as archive:
             data = json.loads(archive.read("object.json"))
         self.assertIs(data["properties"]["isStackable"], False)
+
+
+class TreeTests(unittest.TestCase):
+    def setUp(self):
+        self.out = tempfile.mkdtemp(prefix="rct_test_")
+        self.scene, self.props = reset_scene()
+        bpy.data.objects.remove(bpy.data.objects["Cube"])
+        self.props.output_directory = self.out
+
+    def tearDown(self):
+        shutil.rmtree(self.out, ignore_errors=True)
+
+    def edit(self, obj, **values):
+        # Auto update defers changes made within 50 ms to a timer, which
+        # never runs in background mode.
+        for key, value in values.items():
+            tree_generator._last_finished = 0.0
+            setattr(obj.rct_tree, key, value)
+
+    def add(self, preset="BROADLEAF"):
+        self.scene.rct_tree_preset = preset
+        self.assertEqual(bpy.ops.rct_graphics.tree_add(), {"FINISHED"})
+        return bpy.context.active_object
+
+    def test_every_preset(self):
+        for preset in tree.PRESETS:
+            obj = self.add(preset)
+            mesh = obj.data
+            self.assertEqual(len(mesh.materials), 4, preset)
+            self.assertGreater(len(mesh.polygons), 0, preset)
+            indices = np.empty(len(mesh.polygons), dtype=np.int32)
+            mesh.polygons.foreach_get("material_index", indices)
+            self.assertLess(indices.max(), 4, preset)
+            for index in np.unique(indices):
+                self.assertIsNotNone(mesh.materials[int(index)], preset)
+            self.assertTrue(self.props.flag_small_isTree)
+            bpy.data.objects.remove(obj)
+
+    def test_regenerating_keeps_edited_materials(self):
+        obj = self.add()
+        leaves = obj.rct_tree.material_leaves
+        node = leaves.node_tree.nodes[tree_generator.GROUP_NODE_NAME]
+        node.inputs["Colour A"].default_value = (1.0, 0.0, 0.0, 1.0)
+        obj.rct_tree.seed = 5
+        bpy.ops.rct_graphics.tree_load_preset()
+        self.assertIs(obj.data.materials[1], leaves)
+        self.assertEqual(tuple(node.inputs["Colour A"].default_value), (1.0, 0.0, 0.0, 1.0))
+        self.assertEqual(obj.rct_tree.seed, 5)
+
+    def test_slot_edits_are_adopted(self):
+        obj = self.add()
+        custom = bpy.data.materials.new("Custom Bark")
+        obj.material_slots[0].material = custom
+        bpy.ops.rct_graphics.tree_regenerate()
+        self.assertIs(obj.rct_tree.material_trunk, custom)
+        self.assertIs(obj.data.materials[0], custom)
+
+    def test_auto_update_and_cleanup(self):
+        obj = self.add()
+        faces = len(obj.data.polygons)
+        for seed in range(20):
+            self.edit(obj, seed=seed + 2)
+        self.edit(obj, branch_count=12)
+        self.assertNotEqual(len(obj.data.polygons), faces)
+        self.assertEqual(len(bpy.data.metaballs), 0)
+        self.assertFalse([o for o in bpy.data.objects if o.name.startswith(tree_generator.METABALL_NAME)])
+        self.assertFalse([m.name for m in bpy.data.meshes if m.users == 0 and m.name.startswith(tree_generator.TREE_NAME)])
+
+    def test_make_unique(self):
+        first = self.add()
+        second = self.add()
+        self.assertIs(first.rct_tree.material_leaves, second.rct_tree.material_leaves)
+        bpy.ops.rct_graphics.tree_make_unique()
+        self.assertIsNot(first.rct_tree.material_leaves, second.rct_tree.material_leaves)
+        self.assertIs(second.data.materials[1], second.rct_tree.material_leaves)
+
+    def test_remap_leaves_render(self):
+        obj = self.add()
+        obj.rct_tree.colour_leaves = "1"
+        self.assertEqual(materials.get_remap(obj.rct_tree.material_leaves), 1)
+        self.props.object_id = "test.scenery_small.tree"
+        self.props.build_parkobj = True
+        sprites = self.render()
+        self.assertEqual(sorted(sprites), [0, 1, 2, 3])
+        self.assertTrue(set(np.unique(sprites[0][0])) & set(palette.REMAP_RANGES[1]))
+        path = os.path.join(self.out, "test.scenery_small.tree.parkobj")
+        with zipfile.ZipFile(path) as archive:
+            data = json.loads(archive.read("object.json"))
+        self.assertIs(data["properties"]["hasPrimaryColour"], True)
+        self.assertIs(data["properties"]["isTree"], True)
+
+    def test_quarter_and_large_trees(self):
+        obj = self.add("SHRUB")
+        self.edit(obj, size="QUARTER")
+        self.assertEqual(self.props.small_shape, "QUARTER")
+        self.assertEqual(len(self.render()), 4)
+        co = _vertices(obj)
+        self.assertLess(np.abs(co[:, :2]).max(), 1.0 + tree.displacement_amplitude(tree_generator.to_params(obj.rct_tree)))
+        bpy.data.objects.remove(obj)
+        obj = self.add("BROADLEAF")
+        self.edit(obj, size="LARGE")
+        co = _vertices(obj)
+        centre = (co.min(axis=0) + co.max(axis=0))[:2] / 2.0
+        np.testing.assert_allclose(centre, (-2.0, -2.0), atol=0.5)
+        self.assertEqual((self.props.object_type, self.props.tiles_width, self.props.tiles_length), ("LARGE", 2, 2))
+        self.assertTrue(self.props.flag_large_isTree)
+        self.assertEqual(len(self.render()), 4 + 4 * 4)
+
+    def test_scene_mismatch(self):
+        obj = self.add()
+        self.assertTrue(tree_generator.matches_scene(obj.rct_tree, self.props))
+        self.props.small_shape = "HALF"
+        self.assertFalse(tree_generator.matches_scene(obj.rct_tree, self.props))
+        bpy.ops.rct_graphics.tree_match_scene()
+        self.assertEqual(self.props.small_shape, "FULL")
+
+    def test_apply_freezes_the_mesh(self):
+        obj = self.add()
+        mesh = obj.data
+        bpy.ops.rct_graphics.tree_apply("EXEC_DEFAULT")
+        self.assertFalse(obj.rct_tree.enabled)
+        self.edit(obj, seed=9)
+        self.assertIs(obj.data, mesh)
+
+    def render(self):
+        self.assertEqual(bpy.ops.rct_graphics.render(), {"FINISHED"})
+        return export.load_sprites(self.out)
+
+
+def _vertices(obj):
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    return co.reshape(-1, 3)
 
 
 def _paint(store, sprite, top):

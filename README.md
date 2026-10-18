@@ -92,6 +92,55 @@ are then excluded from plain pixels. `hasPrimaryColour` and the related flags
 are detected from the rendered sprites. Each remap writes its own coverage
 AOV, so edges between two remap materials are never mistaken for a third.
 
+## Tree generator
+
+The *Tree Generator* panel builds procedural trees in the style of the
+original game's trees: a tapered trunk, branches, and a canopy of merged,
+noise-displaced blobs. A generated tree is an ordinary mesh, so it renders,
+quantizes and exports like any other model. See
+[tree_generator_specification.md](tree_generator_specification.md) for the
+full design.
+
+1. Pick a **preset** (Broadleaf, Birch, Gnarled Oak, Layered, Conifer, Snowy
+   Conifer, Cypress, Shrub, Flowering Shrub, Topiary Ball/Cone/Heart,
+   Weeping, Blossom, Palm, Bare) and click **Add Tree**. The tree's
+   footprint follows the scene's current object type and shape. The add-on
+   then sets the object type to match and ticks the *Tree* flag.
+2. Select the tree to edit it. Settings are stored on the object, so a
+   `.blend` file can hold several editable trees. With *Auto Update* the mesh
+   is rebuilt on every change. The same settings and **seed** always give the
+   same tree; the refresh button picks a new seed.
+
+| Section | Settings |
+|---|---|
+| Size | Footprint (full tile, full tile centred, quarter tile, large W x L), height (in BU, clearance units or land steps), overhang |
+| Trunk | Length (where the trunk ends), base and top radius, taper, root flare, sides |
+| Trunk Shape | Straightness, bend frequency, gnarl, lean and lean direction, twist, forks |
+| Branches | Count, start/end height, bottom/top angle, length and length profile, radius ratio, curve, spread (spiral, whorled, random), sub-branches, jitter |
+| Leaves | Style (blobs, layers, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, mesh resolution |
+| Accent and Base | Dots (flowers, berries) or top-facing faces (snow); mound, pot or rocks base |
+
+**Materials.** The tree has four material slots: trunk, leaves, accent and
+base. Missing ones get shared default materials (`RCT Tree Leaves`, ...).
+Their main values are exposed on an `RCT Tree <Role>` node group: Colour A,
+Colour B, Speckle Scale and Bump Strength. Any material can be picked for a
+role, or dropped straight into its slot; regenerating never replaces it.
+Each role's **Colour** dropdown makes its material plain or Remap 1/2/3 (for
+example player-coloured blossom or leaves). Remember that remap pixels keep
+only their brightness. **Make Unique** copies the shared materials so edits
+stay on one tree.
+
+**Footprint and look.** The canopy is limited to the footprint's half-width
+times *Overhang*. The original trees reach the tile's corners, so most
+presets use an overhang of about 1.4; the panel notes when a canopy spills
+into neighbouring tiles. It warns above about 13 BU for small scenery, where
+the game's bounding box stops, and shows a **Match Scene** button if the
+scene's object type no longer matches the tree. **Use Suggested Look**
+applies the preset's outline setting.
+
+**Apply (Freeze Mesh)** turns the tree into a plain mesh for manual editing.
+Until then, regenerating replaces manual mesh edits.
+
 ## Anti-aliasing and the RCT look
 
 Blender Internal used to anti-alias only the inside of objects, leaving a hard
@@ -161,9 +210,10 @@ blender --command extension validate rct_cycles_graphics              # manifest
 ```
 
 `rct_cycles_graphics/core` is free of `bpy` and holds the palette,
-quantization, projection, job layouts, alignment and JSON logic. The Blender
-side (`scene_setup.py`, `render.py`, `materials.py`, `operators.py`,
-`alignment_tools.py`, `ui.py`) drives Cycles and the UI.
+quantization, projection, job layouts, alignment, JSON and tree generation
+logic. The Blender side (`scene_setup.py`, `render.py`, `materials.py`,
+`operators.py`, `tree_generator.py`, `alignment_tools.py`, `ui.py`) drives
+Cycles and the UI.
 
 ## Credits
 

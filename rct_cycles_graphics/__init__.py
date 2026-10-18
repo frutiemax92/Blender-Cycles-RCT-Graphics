@@ -17,7 +17,7 @@ bl_info = {
 
 import importlib
 
-_module_names = ("preferences", "properties", "operators", "materials", "alignment_tools", "ui")
+_module_names = ("preferences", "properties", "operators", "materials", "tree_generator", "alignment_tools", "ui")
 
 _modules = []
 

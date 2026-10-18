@@ -24,6 +24,10 @@ def postprocess_settings(props):
         alpha_threshold=props.alpha_threshold,
         dither_method=props.dither_method,
         dither_strength=props.dither_strength,
+        background_blend=props.background_blend,
+        outline_shades=props.outline_shades,
+        outline_width=props.outline_width,
+        outline_diagonal=props.outline_diagonal,
     )
 
 

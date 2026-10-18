@@ -65,11 +65,52 @@ class Settings:
         dither_method="FLOYD_STEINBERG",
         dither_strength=0.35,
         ramps=None,
+        background_blend=False,
+        background_colour=(0.041, 0.044, 0.041),
+        outline_shades=0,
+        outline_width=1,
+        outline_diagonal=False,
     ):
         self.alpha_threshold = alpha_threshold
         self.dither_method = dither_method
         self.dither_strength = dither_strength
         self.ramps = ramps
+        self.background_blend = background_blend
+        self.background_colour = background_colour
+        self.outline_shades = outline_shades
+        self.outline_width = outline_width
+        self.outline_diagonal = outline_diagonal
+
+
+def edge_pixels(opaque, width=1, diagonal=False):
+    """Opaque pixels within ``width`` pixels of a transparent one (inner rim)."""
+    height, cols = opaque.shape
+    padded = np.zeros((height + 2 * width, cols + 2 * width), dtype=bool)
+    padded[width:-width, width:-width] = opaque
+    interior = opaque.copy()
+    for dy in range(-width, width + 1):
+        for dx in range(-width, width + 1):
+            if dx == 0 and dy == 0:
+                continue
+            if not diagonal and abs(dx) + abs(dy) > width:
+                continue
+            interior &= padded[width + dy : width + dy + height, width + dx : width + dx + cols]
+    return opaque & ~interior
+
+
+def apply_outline(indices, settings):
+    """Darken the sprite's rim along each pixel's own palette ramp.
+
+    This reproduces the dark contour of many original sprites (e.g. trees)
+    without leaving the palette: a recolourable pixel stays recolourable.
+    """
+    if settings.outline_shades <= 0:
+        return indices
+    rim = edge_pixels(indices != palette.TRANSPARENT, settings.outline_width, settings.outline_diagonal)
+    table = palette.shade_shift_table(-settings.outline_shades)
+    result = indices.copy()
+    result[rim] = table[indices[rim]]
+    return result
 
 
 def to_indices(rgba_linear, settings, remap=None, mask=None):
@@ -84,7 +125,14 @@ def to_indices(rgba_linear, settings, remap=None, mask=None):
     opaque = silhouette(alpha, settings.alpha_threshold)
     if mask is not None:
         opaque &= mask
-    rgb = linear_to_srgb(unpremultiply(rgba_linear)) * 255.0
+    if settings.background_blend:
+        # RCT1 style: edges are anti-aliased against a dark background, which
+        # leaves a dark fringe once the silhouette is made hard again.
+        background = np.asarray(settings.background_colour, dtype=np.float32)
+        linear = rgba_linear[..., :3] + background * (1.0 - alpha[..., None])
+    else:
+        linear = unpremultiply(rgba_linear)
+    rgb = linear_to_srgb(linear) * 255.0
 
     if remap is None:
         remap = np.zeros(alpha.shape, dtype=np.int32)
@@ -95,9 +143,10 @@ def to_indices(rgba_linear, settings, remap=None, mask=None):
         allowed[remap_number] = palette.remap_indices(remap_number)
         selected = classes == remap_number
         rgb[selected] = project_onto_ramp(rgb[selected], allowed[remap_number])
-    return quantize.quantize(
+    indices = quantize.quantize(
         rgb, classes, allowed, method=settings.dither_method, strength=settings.dither_strength
     )
+    return apply_outline(indices, settings)
 
 
 class Sprite:

@@ -116,6 +116,43 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         max=1.0,
     )
 
+    background_blend: BoolProperty(
+        name="Blend Edges with Background",
+        description=(
+            "Anti-alias the edges against a dark background before cutting the "
+            "silhouette, giving the dark fringe typical of RCT1 graphics"
+        ),
+        default=False,
+    )
+
+    # Outline -------------------------------------------------------------
+
+    outline_shades: IntProperty(
+        name="Outline Darkening",
+        description=(
+            "Darken the sprite's rim by this many shades of each pixel's own "
+            "palette ramp (0 disables the outline). Many original sprites, "
+            "such as trees, have such a dark contour"
+        ),
+        default=0,
+        min=0,
+        max=11,
+    )
+
+    outline_width: IntProperty(
+        name="Outline Width",
+        description="Thickness of the darkened rim in pixels",
+        default=1,
+        min=1,
+        max=4,
+    )
+
+    outline_diagonal: BoolProperty(
+        name="Diagonal Neighbours",
+        description="Also treat pixels touching the background only by a corner as rim",
+        default=False,
+    )
+
     # Colour --------------------------------------------------------------
 
     dither_method: EnumProperty(

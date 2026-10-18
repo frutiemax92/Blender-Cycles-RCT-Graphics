@@ -62,6 +62,14 @@ class RCT_PT_render_settings(bpy.types.Panel):
 
         col = layout.column(heading="Silhouette")
         col.prop(props, "alpha_threshold")
+        col.prop(props, "background_blend")
+
+        col = layout.column(heading="Outline")
+        col.prop(props, "outline_shades")
+        sub = col.column()
+        sub.active = props.outline_shades > 0
+        sub.prop(props, "outline_width")
+        sub.prop(props, "outline_diagonal")
 
         col = layout.column(heading="Palette")
         col.prop(props, "dither_method")

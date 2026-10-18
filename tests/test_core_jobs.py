@@ -70,3 +70,34 @@ class RemapTests(unittest.TestCase):
         alpha = np.array([[1.0, 0.5, 0.0]])
         aov = np.array([[2.0, 1.0, 0.0]])
         np.testing.assert_array_equal(postprocess.remap_classes(aov, alpha), [[2, 2, 0]])
+
+
+class OutlineTests(unittest.TestCase):
+    def test_edge_pixels(self):
+        opaque = np.zeros((5, 5), dtype=bool)
+        opaque[1:4, 1:4] = True
+        rim = postprocess.edge_pixels(opaque)
+        self.assertEqual(rim.sum(), 8)
+        self.assertFalse(rim[2, 2])
+
+    def test_outline_darkens_within_ramp(self):
+        from rct_cycles_graphics.core import palette
+
+        indices = np.zeros((5, 5), dtype=np.uint8)
+        indices[1:4, 1:4] = 100
+        indices[1, 1] = 250
+        out = postprocess.apply_outline(indices, postprocess.Settings(outline_shades=2))
+        self.assertEqual(out[2, 2], 100)
+        self.assertEqual(out[1, 2], 98)
+        self.assertEqual(out[1, 1], 248)
+        self.assertIn(out[1, 1], palette.REMAP_RANGES[1])
+        self.assertEqual(out[0, 0], 0)
+
+    def test_background_blend_darkens_edges(self):
+        rgba = np.zeros((1, 2, 4), dtype=np.float32)
+        rgba[0, 0] = (0.8, 0.8, 0.8, 1.0)
+        rgba[0, 1] = (0.48, 0.48, 0.48, 0.6)
+        plain = postprocess.to_indices(rgba, postprocess.Settings(dither_method="NONE"))
+        blended = postprocess.to_indices(rgba, postprocess.Settings(dither_method="NONE", background_blend=True))
+        self.assertEqual(plain[0, 0], plain[0, 1])
+        self.assertNotEqual(blended[0, 0], blended[0, 1])

@@ -4,6 +4,7 @@ import shutil
 import bpy
 
 from . import preferences, render, scene_setup
+from .properties import selected_ramps
 from .core import alignment, export, jobs, objectjson, postprocess
 
 
@@ -25,6 +26,7 @@ def postprocess_settings(props):
         alpha_threshold=props.alpha_threshold,
         dither_method=props.dither_method,
         dither_strength=props.dither_strength,
+        ramps=selected_ramps(props),
         background_blend=props.background_blend,
         outline_shades=props.outline_shades,
         outline_width=props.outline_width,

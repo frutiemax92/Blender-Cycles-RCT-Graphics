@@ -1,6 +1,7 @@
 import bpy
 
 from . import materials, scene_setup
+from .core.palette import RAMP_TITLES
 
 
 class RCT_PT_main(bpy.types.Panel):
@@ -90,6 +91,11 @@ class RCT_PT_render_settings(bpy.types.Panel):
         sub.prop(props, "outline_diagonal")
 
         col = layout.column(heading="Palette")
+        col.prop(props, "palette_mode")
+        if props.palette_mode == "CUSTOM":
+            grid = col.grid_flow(columns=2, even_columns=True, align=True)
+            for i, (_, title) in enumerate(RAMP_TITLES):
+                grid.prop(props, "palette_ramps", index=i, text=title, toggle=True)
         col.prop(props, "dither_method")
         sub = col.column()
         sub.active = props.dither_method != "NONE"

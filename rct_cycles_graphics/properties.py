@@ -1,12 +1,15 @@
 import bpy
 from bpy.props import (
     BoolProperty,
+    BoolVectorProperty,
     EnumProperty,
     FloatProperty,
     IntProperty,
     PointerProperty,
     StringProperty,
 )
+
+from .core.palette import RAMP_TITLES
 
 
 def _update_footprint(self, context):
@@ -18,6 +21,16 @@ def _update_footprint(self, context):
         scene_setup.build_tile_grid(context.scene, self.tiles_width, self.tiles_length)
     else:
         scene_setup.build_tile_grid(context.scene, 1, 1, wall=self.object_type == "WALL")
+
+
+def selected_ramps(props):
+    """Ramp names allowed for plain pixels, or None for all of them."""
+    if props.palette_mode == "FULL":
+        return None
+    if props.palette_mode == "GREY":
+        return ["grey"]
+    ramps = [name for (name, _), used in zip(RAMP_TITLES, props.palette_ramps) if used]
+    return ramps or ["grey"]
 
 
 class RCTGraphicsProperties(bpy.types.PropertyGroup):
@@ -295,6 +308,24 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
             ("NONE", "None", "Nearest palette colour only"),
         ),
         default="FLOYD_STEINBERG",
+    )
+
+    palette_mode: EnumProperty(
+        name="Palette",
+        description="Colours plain (non recolourable) pixels may use",
+        items=(
+            ("FULL", "Full", "Every non-animated colour of the game palette"),
+            ("GREY", "Grey Only", "Greys only, common for ride vehicles"),
+            ("CUSTOM", "Custom", "Pick the colour ramps to use"),
+        ),
+        default="FULL",
+    )
+
+    palette_ramps: BoolVectorProperty(
+        name="Colour Ramps",
+        description="Colour ramps used by the custom palette",
+        size=len(RAMP_TITLES),
+        default=[True] * len(RAMP_TITLES),
     )
 
     dither_strength: FloatProperty(

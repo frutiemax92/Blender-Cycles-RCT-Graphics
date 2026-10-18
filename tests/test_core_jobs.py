@@ -12,10 +12,12 @@ from rct_cycles_graphics.core import export, jobs, postprocess  # noqa: E402
 
 class JobTests(unittest.TestCase):
     def test_small_scenery_layout(self):
-        job_list = jobs.small_scenery("FULL", frames=2, start_index=10)
+        frames = jobs.animation_frames(2, first=5, step=3)
+        self.assertEqual(frames, [5, 8])
+        job_list = jobs.small_scenery("FULL", frames=frames, start_index=10)
         self.assertEqual([j.index for j in job_list], list(range(10, 18)))
         self.assertEqual([j.view for j in job_list], [0, 1, 2, 3] * 2)
-        self.assertEqual([j.frame for j in job_list], [0] * 4 + [1] * 4)
+        self.assertEqual([j.frame for j in job_list], [5] * 4 + [8] * 4)
 
     def test_small_scenery_anchor_is_view_independent(self):
         for anchor, expected in (("FULL", (0, -1)), ("CENTRED", (0, -13)), ("NO_WALLS", (0, -15))):

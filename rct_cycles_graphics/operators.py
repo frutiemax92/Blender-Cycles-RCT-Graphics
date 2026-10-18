@@ -32,8 +32,11 @@ def postprocess_settings(props):
 
 
 def build_jobs(props):
+    frames = jobs.animation_frames(
+        props.animation_frames, props.animation_first_frame, props.animation_frame_step
+    )
     if props.object_type == "SMALL":
-        return jobs.small_scenery(props.small_anchor, 1, props.start_index)
+        return jobs.small_scenery(props.small_anchor, frames, props.start_index)
     raise ValueError("Unsupported object type " + props.object_type)
 
 

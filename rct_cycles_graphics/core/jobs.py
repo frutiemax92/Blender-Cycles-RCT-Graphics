@@ -46,11 +46,20 @@ class Job:
         )
 
 
-def small_scenery(anchor="FULL", frames=1, start_index=0):
-    """Four rotations per animation frame: image = start + 4 * frame + view."""
+def animation_frames(count=1, first=1, step=1):
+    """Scene frame numbers of an animation with ``count`` sprites."""
+    return [first + i * step for i in range(max(1, count))]
+
+
+def small_scenery(anchor="FULL", frames=(1,), start_index=0):
+    """Four rotations per animation frame: image = start + 4 * frame + view.
+
+    This is the layout animated small scenery uses in Paint.SmallScenery.cpp
+    (``frame * 4 + direction``).
+    """
     offset = SMALL_SCENERY_ANCHORS[anchor]
     jobs = []
-    for frame in range(frames):
+    for number, frame in enumerate(frames):
         for view in range(4):
-            jobs.append(Job(view, frame, start_index + frame * 4 + view, offset))
+            jobs.append(Job(view, frame, start_index + number * 4 + view, offset))
     return jobs

@@ -28,6 +28,13 @@ class RCT_PT_main(bpy.types.Panel):
         if props.object_type == "SMALL":
             box.prop(props, "small_anchor")
 
+        box = layout.box()
+        box.prop(props, "animation_frames")
+        if props.animation_frames > 1:
+            row = box.row(align=True)
+            row.prop(props, "animation_first_frame")
+            row.prop(props, "animation_frame_step")
+
         layout.operator("rct_graphics.render", icon="RENDER_STILL")
 
 

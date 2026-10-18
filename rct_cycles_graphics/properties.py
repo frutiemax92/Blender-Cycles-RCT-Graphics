@@ -48,6 +48,26 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         default="FULL",
     )
 
+    animation_frames: IntProperty(
+        name="Animation Frames",
+        description="Number of animation frames to render (1 for a still object)",
+        default=1,
+        min=1,
+    )
+
+    animation_first_frame: IntProperty(
+        name="First Frame",
+        description="Scene frame of the first animation frame",
+        default=1,
+    )
+
+    animation_frame_step: IntProperty(
+        name="Frame Step",
+        description="Scene frames between two rendered animation frames",
+        default=1,
+        min=1,
+    )
+
     # Rendering -----------------------------------------------------------
 
     samples: IntProperty(

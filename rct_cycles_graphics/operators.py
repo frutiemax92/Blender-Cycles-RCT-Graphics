@@ -37,7 +37,15 @@ def build_jobs(props):
     )
     if props.object_type == "SMALL":
         return jobs.small_scenery(props.small_anchor, frames, props.start_index)
+    if props.object_type == "LARGE":
+        return jobs.large_scenery(props.tiles_width, props.tiles_length, props.start_index, frames[0])
     raise ValueError("Unsupported object type " + props.object_type)
+
+
+def footprint(props):
+    if props.object_type == "LARGE":
+        return props.tiles_width, props.tiles_length
+    return 1, 1
 
 
 def output_directory(props):
@@ -72,7 +80,9 @@ class RCT_OT_render(bpy.types.Operator):
             window_manager.progress_update(done / total)
 
         try:
-            sprites = render.run_jobs(context, job_list, postprocess_settings(props), progress)
+            sprites = render.run_jobs(
+                context, job_list, postprocess_settings(props), progress, footprint(props)
+            )
         finally:
             window_manager.progress_end()
 

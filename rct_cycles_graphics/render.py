@@ -8,6 +8,7 @@ import bpy
 import numpy as np
 
 from . import scene_setup
+from .core import jobs as jobs_core
 from .core import postprocess, projection
 
 #: Name of the AOV written by recolourable materials (see materials.py).
@@ -187,30 +188,50 @@ class Renderer:
         )
 
 
-def run_jobs(context, jobs, settings, progress=None):
-    """Render ``jobs`` and return ``{image_index: Sprite}``."""
+def run_jobs(context, jobs, settings, progress=None, footprint=(1, 1)):
+    """Render ``jobs`` and return ``{image_index: Sprite}``.
+
+    footprint: (width, length) in tiles, used to split jobs bound to a tile.
+    """
     sprites = {}
     groups = {}
     for job in jobs:
         groups.setdefault(job.render_key, []).append(job)
 
     with Renderer(context) as renderer:
-        for step, (key, group) in enumerate(sorted(groups.items())):
+        for step, (key, group) in enumerate(sorted(groups.items(), key=lambda item: _sort_key(item[0]))):
             view, frame, _variant = key
             result = renderer.render(view, frame)
-            for job in group:
-                sprites[job.index] = _make_sprite(result, job, settings)
+            if result is None:
+                for job in group:
+                    sprites[job.index] = postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)
+            else:
+                _make_sprites(result, group, settings, footprint, sprites)
             if progress is not None:
                 progress(step + 1, len(groups))
     return sprites
 
 
-def _make_sprite(result, job, settings):
-    if result is None:
-        return postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)
+def _sort_key(render_key):
+    view, frame, variant = render_key
+    return (frame, "" if variant is None else str(variant), view)
+
+
+def _make_sprites(result, group, settings, footprint, sprites):
     remap = None
     if result.remap is not None:
         remap = postprocess.remap_classes(result.remap, result.rgba[..., 3])
+    # Quantize the whole render once, so dithering and outlines do not show
+    # seams where large scenery is cut into tiles.
     indices = postprocess.to_indices(result.rgba, settings, remap=remap)
+    tiles = None
     x0, y0 = result.bounds[0], result.bounds[1]
-    return postprocess.make_sprite(indices, x0, y0, job.anchor())
+    for job in group:
+        job_indices = indices
+        if job.tile is not None:
+            if tiles is None:
+                if result.position is None:
+                    raise RuntimeError("The render has no Position pass to split tiles with")
+                tiles = jobs_core.tile_map(result.position, result.rgba[..., 3], *footprint)
+            job_indices = np.where(tiles == job.tile, indices, 0).astype(np.uint8)
+        sprites[job.index] = postprocess.make_sprite(job_indices, x0, y0, job.anchor())

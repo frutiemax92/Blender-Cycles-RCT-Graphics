@@ -27,10 +27,17 @@ class RCT_PT_main(bpy.types.Panel):
         box = layout.box()
         if props.object_type == "SMALL":
             box.prop(props, "small_anchor")
+        elif props.object_type == "LARGE":
+            row = box.row(align=True)
+            row.prop(props, "tiles_width")
+            row.prop(props, "tiles_length")
+            box.label(text="Tiles extend from the origin tile towards -X / -Y", icon="INFO")
 
         box = layout.box()
         box.prop(props, "animation_frames")
-        if props.animation_frames > 1:
+        if props.object_type == "LARGE":
+            box.label(text="Large scenery renders the first frame only")
+        elif props.animation_frames > 1:
             row = box.row(align=True)
             row.prop(props, "animation_first_frame")
             row.prop(props, "animation_frame_step")

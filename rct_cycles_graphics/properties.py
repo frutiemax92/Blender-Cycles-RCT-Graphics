@@ -9,6 +9,17 @@ from bpy.props import (
 )
 
 
+def _update_footprint(self, context):
+    from . import scene_setup
+
+    if scene_setup.get_rig(context.scene)[0] is None:
+        return
+    if self.object_type == "LARGE":
+        scene_setup.build_tile_grid(context.scene, self.tiles_width, self.tiles_length)
+    else:
+        scene_setup.build_tile_grid(context.scene, 1, 1)
+
+
 class RCTGraphicsProperties(bpy.types.PropertyGroup):
     object_type: EnumProperty(
         name="Object Type",
@@ -18,6 +29,25 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
             ("WALL", "Wall", "Wall piece rendered along a tile edge"),
         ),
         default="SMALL",
+        update=_update_footprint,
+    )
+
+    tiles_width: IntProperty(
+        name="Width",
+        description="Footprint size in tiles along the game x axis (Blender -X)",
+        default=2,
+        min=1,
+        max=16,
+        update=_update_footprint,
+    )
+
+    tiles_length: IntProperty(
+        name="Length",
+        description="Footprint size in tiles along the game y axis (Blender -Y)",
+        default=2,
+        min=1,
+        max=16,
+        update=_update_footprint,
     )
 
     output_directory: StringProperty(

@@ -63,3 +63,71 @@ def small_scenery(anchor="FULL", frames=(1,), start_index=0):
         for view in range(4):
             jobs.append(Job(view, frame, start_index + number * 4 + view, offset))
     return jobs
+
+
+def large_scenery_tiles(width, length):
+    """Tiles of a ``width`` x ``length`` footprint in sequence order.
+
+    Tile (i, j) is centred on Blender (-4 i, -4 j) and sits at game offset
+    (32 i, 32 j) from the first tile, since game +x is Blender -X.
+    Returns a list of dicts with ``seq``, ``i``, ``j``, ``center`` and ``x``/``y``.
+    """
+    tiles = []
+    for j in range(length):
+        for i in range(width):
+            tiles.append(
+                {
+                    "seq": len(tiles),
+                    "i": i,
+                    "j": j,
+                    "center": (-projection.TILE_SIZE * i, -projection.TILE_SIZE * j),
+                    "x": 32 * i,
+                    "y": 32 * j,
+                }
+            )
+    return tiles
+
+
+def large_scenery(width, length, start_index=0, frame=1):
+    """Preview images 0-3, then one image per tile and view: 4 + 4 * seq + view.
+
+    Matches Paint.LargeScenery.cpp: ``image + 4 + (sequence << 2) + direction``.
+    Every tile sprite is anchored on its own tile's top corner.
+    """
+    tiles = large_scenery_tiles(width, length)
+    jobs = []
+    for view in range(4):
+        jobs.append(Job(view, frame, start_index + view, (0, 0, 0)))
+    for tile in tiles:
+        for view in range(4):
+            jobs.append(
+                Job(
+                    view,
+                    frame,
+                    start_index + 4 + 4 * tile["seq"] + view,
+                    (0, 0, 0),
+                    tile_center=tile["center"],
+                    tile=tile["seq"],
+                )
+            )
+    return jobs
+
+
+def tile_map(position, alpha, width, length):
+    """Sequence number of the footprint tile under each pixel (-1 if empty).
+
+    ``position`` is Cycles' Position pass, which is coverage weighted at the
+    silhouette, hence the division by alpha. Geometry overhanging the
+    footprint is given to the nearest tile.
+    """
+    import numpy as np
+
+    safe = np.where(alpha > 1e-6, alpha, 1.0)
+    x = position[..., 0] / safe
+    y = position[..., 1] / safe
+    half = projection.TILE_SIZE / 2.0
+    i = np.clip(np.floor((half - x) / projection.TILE_SIZE), 0, width - 1).astype(np.int32)
+    j = np.clip(np.floor((half - y) / projection.TILE_SIZE), 0, length - 1).astype(np.int32)
+    result = j * width + i
+    result[alpha <= 1e-6] = -1
+    return result

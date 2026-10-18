@@ -103,3 +103,29 @@ class OutlineTests(unittest.TestCase):
         blended = postprocess.to_indices(rgba, postprocess.Settings(dither_method="NONE", background_blend=True))
         self.assertEqual(plain[0, 0], plain[0, 1])
         self.assertNotEqual(blended[0, 0], blended[0, 1])
+
+
+class LargeSceneryTests(unittest.TestCase):
+    def test_layout_matches_game_image_indices(self):
+        job_list = jobs.large_scenery(2, 3, start_index=0)
+        self.assertEqual(len(job_list), 4 + 2 * 3 * 4)
+        tile_jobs = [j for j in job_list if j.tile is not None]
+        for job in tile_jobs:
+            self.assertEqual(job.index, 4 + 4 * job.tile + job.view)
+
+    def test_tiles_have_game_offsets(self):
+        tiles = jobs.large_scenery_tiles(2, 2)
+        self.assertEqual([(t["x"], t["y"]) for t in tiles], [(0, 0), (32, 0), (0, 32), (32, 32)])
+        self.assertEqual(tiles[3]["center"], (-4.0, -4.0))
+
+    def test_tile_anchor_moves_with_tile(self):
+        job = jobs.Job(0, 1, 0, (0, 0, 0), tile_center=(-4.0, 0.0), tile=1)
+        # Game tile (32, 0) is 32 px left and 16 px down from tile (0, 0).
+        self.assertEqual(job.anchor(), (-32, 0))
+
+    def test_tile_map(self):
+        position = np.array([[[0.0, 0.0, 0.0], [-4.0, 0.0, 1.0], [-4.0, -4.0, 0.0], [-9.0, 0.5, 0.0]]])
+        alpha = np.array([[1.0, 1.0, 0.5, 1.0]])
+        position[0, 2] *= 0.5
+        tiles = jobs.tile_map(position, alpha, 2, 2)
+        np.testing.assert_array_equal(tiles, [[0, 1, 3, 1]])

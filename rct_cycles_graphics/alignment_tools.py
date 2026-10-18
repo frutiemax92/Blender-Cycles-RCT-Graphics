@@ -1,6 +1,7 @@
 """Blender operators for checking and fixing how objects line up in game."""
 
 import os
+import struct
 
 import bpy
 import numpy as np
@@ -8,7 +9,7 @@ from bpy.props import BoolProperty, IntProperty
 from mathutils import Matrix
 
 from . import preferences, render
-from .core import alignment, export, g1, png, projection, terrain
+from .core import alignment, export, g1, png, projection, rct2dat, terrain
 
 PREVIEW_FILE = "alignment_preview.png"
 PREVIEW_IMAGE = "RCT Alignment Preview"
@@ -110,9 +111,9 @@ def _show_in_image_editor(context, image):
     return False
 
 
-def grass_tile(context):
+def grass_tile(rct2):
     """The ground tile sprite and whether it is the game's own (from g1.dat)."""
-    path = preferences.g1_path(context)
+    path = g1.find_g1(rct2)
     if path is not None:
         try:
             sprite = g1.read_sprite(path, g1.GRASS_GRID)
@@ -141,10 +142,30 @@ def preview_jobs(job_list):
     return views
 
 
-def run_terrain_preview(context, margin=2, scale=2):
-    """Composite the rendered sprites on grass in the four views.
+def comparison_names(props):
+    """The vanilla trees picked to stand beside the object, in slot order."""
+    return [name for name in (getattr(props, "compare_tree_{}".format(i)) for i in range(1, 5)) if name != "NONE"]
 
-    Returns (preview path, whether the game's grass was used).
+
+def load_vanilla(rct2, names):
+    """Read the picked RCT2 objects; returns (objects, names not found)."""
+    objdata = rct2dat.find_objdata(rct2)
+    objects, missing = [], []
+    for name in names:
+        path = rct2dat.find_object(objdata, name)
+        try:
+            objects.append(rct2dat.read_small_scenery(path))
+        except (OSError, TypeError, ValueError, IndexError, struct.error):
+            missing.append(name)
+    return objects, missing
+
+
+def run_terrain_preview(context, margin=2, scale=2):
+    """Composite the rendered sprites, and the vanilla trees picked to compare
+    with, on grass in the four views.
+
+    Returns (preview path, whether the game's grass was used, vanilla trees
+    that could not be read).
     """
     from .operators import build_jobs, footprint, output_directory
 
@@ -153,20 +174,31 @@ def run_terrain_preview(context, margin=2, scale=2):
     if not os.path.exists(os.path.join(directory, export.IMAGES_JSON)):
         raise ValueError("Render the sprites first")
     sprites = export.load_sprites(directory)
-    ground, from_game = grass_tile(context)
-    tiles = terrain.ground_tiles(footprint(props), margin)
+    rct2 = preferences.rct2_directory(context)
+    ground, from_game = grass_tile(rct2)
+    vanilla, missing = load_vanilla(rct2, comparison_names(props))
+    occupied = terrain.ground_tiles(footprint(props), margin=0)
 
     views = []
     drawn = 0
     for view, group in enumerate(preview_jobs(build_jobs(props))):
         placements = [(job.index, job.anchor(), job.tile_center) for job in group if job.index in sprites]
         drawn += len(placements)
+        row = terrain.row_tiles(view, len(vanilla), occupied)
+        for obj, centre in zip(vanilla, row):
+            key = (obj.identifier, view)
+            image = obj.images[view % len(obj.images)]
+            sprites[key] = (image.indices, image.x, image.y)
+            top = projection.tile_top_vertex(centre[0], centre[1], view)
+            offset = projection.game_offset_to_screen(*rct2dat.paint_offset(obj.flags, view))
+            placements.append((key, (top[0] + offset[0], top[1] + offset[1]), centre))
+        tiles = terrain.tiles_around(occupied + row, margin)
         views.append(terrain.compose_view(view, ground, tiles, sprites, placements))
     if not drawn:
         raise ValueError("The images in the output folder do not match the object type")
     path = os.path.join(directory, TERRAIN_FILE)
     png.write_rgba(path, terrain.preview_sheet(views, scale=scale))
-    return path, from_game
+    return path, from_game, missing
 
 
 def store_report(scene, lines):
@@ -219,15 +251,20 @@ class RCT_OT_terrain_preview(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            path, from_game = run_terrain_preview(context, self.margin, self.scale)
+            path, from_game, missing = run_terrain_preview(context, self.margin, self.scale)
         except (OSError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         show_preview(context, path, TERRAIN_IMAGE, open_window=True)
-        if from_game:
-            self.report({"INFO"}, "Terrain preview written to " + path)
+        problems = []
+        if not from_game:
+            problems.append("RCT2's g1.dat not found (see the add-on preferences): using a stand-in grass")
+        if missing:
+            problems.append("could not read {} from RCT2's ObjData".format(", ".join(missing)))
+        if problems:
+            self.report({"WARNING"}, "; ".join(problems))
         else:
-            self.report({"WARNING"}, "RCT2's g1.dat not found (see the add-on preferences): using a stand-in grass")
+            self.report({"INFO"}, "Terrain preview written to " + path)
         return {"FINISHED"}
 
 

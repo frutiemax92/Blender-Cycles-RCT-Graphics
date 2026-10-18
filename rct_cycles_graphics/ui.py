@@ -8,6 +8,16 @@ from .core.palette import RAMP_TITLES
 from .properties import flag_property
 
 
+def draw_terrain_preview(layout, props):
+    """The Preview on Grass button with the vanilla trees to compare with."""
+    box = layout.box()
+    box.operator("rct_graphics.terrain_preview", icon="IMAGE_BACKGROUND")
+    box.label(text="Compare with RCT2 trees:")
+    grid = box.grid_flow(columns=2, even_columns=True, align=True)
+    for slot in range(1, 5):
+        grid.prop(props, "compare_tree_{}".format(slot), text="")
+
+
 class RCT_PT_main(bpy.types.Panel):
     bl_label = "RCT Graphics"
     bl_idname = "RCT_PT_main"
@@ -267,7 +277,7 @@ class RCT_PT_tree(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("rct_graphics.tree_load_preset", icon="PRESET")
         row.operator("rct_graphics.tree_apply", icon="FREEZE")
-        layout.operator("rct_graphics.terrain_preview", icon="IMAGE_BACKGROUND")
+        draw_terrain_preview(layout, props)
 
 
 class RCT_PT_object(bpy.types.Panel):
@@ -329,8 +339,8 @@ class RCT_PT_alignment(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("rct_graphics.snap_to_grid", icon="SNAP_GRID")
         row.operator("rct_graphics.check_alignment", icon="VIEWZOOM")
-        layout.operator("rct_graphics.terrain_preview", icon="IMAGE_BACKGROUND")
         layout.prop(props, "check_after_render")
+        draw_terrain_preview(layout, props)
         if props.alignment_report:
             box = layout.box()
             for line in props.alignment_report.split("\n"):

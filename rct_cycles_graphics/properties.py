@@ -11,6 +11,12 @@ from bpy.props import (
 
 from .core.objectjson import OBJECT_FLAGS
 from .core.palette import RAMP_TITLES
+from .core.rct2dat import VANILLA_TREES
+
+_COMPARE_TREE_ITEMS = [("NONE", "None", "No tree")] + [
+    (name, title, "RCT2's {} ({}.DAT)".format(title, name)) for name, title in VANILLA_TREES
+]
+_COMPARE_TREE_DEFAULTS = ("TCO", "TCF", "NONE", "NONE")
 
 
 def _update_footprint(self, context):
@@ -360,6 +366,15 @@ for _object_type, _flags in OBJECT_FLAGS.items():
             description="{} ({})".format(_description, _key),
             default=_default,
         )
+
+# Vanilla trees shown beside the object by Preview on Grass.
+for _slot, _default in enumerate(_COMPARE_TREE_DEFAULTS, start=1):
+    RCTGraphicsProperties.__annotations__["compare_tree_{}".format(_slot)] = EnumProperty(
+        name="Compare With",
+        description="RCT2 tree drawn beside the object in Preview on Grass",
+        items=_COMPARE_TREE_ITEMS,
+        default=_default,
+    )
 
 classes = (RCTGraphicsProperties,)
 

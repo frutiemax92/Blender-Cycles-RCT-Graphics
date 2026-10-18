@@ -52,6 +52,41 @@ def ground_tiles(footprint=(1, 1), margin=2):
     ]
 
 
+def tiles_around(centres, margin=2):
+    """Blender centres of every tile within ``margin`` tiles of the given ones."""
+    size = projection.TILE_SIZE
+    cells = set()
+    for cx, cy in centres:
+        i, j = int(round(cx / size)), int(round(cy / size))
+        for di in range(-margin, margin + 1):
+            for dj in range(-margin, margin + 1):
+                cells.add((i + di, j + dj))
+    return [(size * i, size * j) for i, j in sorted(cells)]
+
+
+def row_tiles(view, count, occupied=()):
+    """``count`` tile centres beside the origin tile, on one screen row of ``view``.
+
+    The tiles alternate right and left of the origin, one tile apart, so
+    objects placed on them stand side by side at the same depth. Tiles in
+    ``occupied`` (Blender centres) are skipped.
+    """
+    angle = projection.view_angle(view)
+    c, s = round(np.cos(angle)), round(np.sin(angle))
+    taken = {(round(x), round(y)) for x, y in occupied}
+    result = []
+    step = 1
+    while len(result) < count:
+        for k in (step, -step):
+            # Screen right in view 0 is (+X, -Y); rotate it into Blender space.
+            vx, vy = k * projection.TILE_SIZE, -k * projection.TILE_SIZE
+            centre = (vx * c - vy * s, vx * s + vy * c)
+            if (round(centre[0]), round(centre[1])) not in taken and len(result) < count:
+                result.append(centre)
+        step += 1
+    return result
+
+
 def compose_view(view, ground, tiles, sprites, placements, margin=8):
     """Grass tiles plus the sprites of one view.
 

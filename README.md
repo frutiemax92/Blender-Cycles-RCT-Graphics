@@ -22,7 +22,8 @@ See [specifications.md](specifications.md) for the original goals.
    **RCT Cycles Graphics**.
 3. Optional: in the add-on preferences, set the **OpenRCT2 User Folder**
    (the folder holding `object/`) to copy built `.parkobj` files there.
-   **Preview on Grass** reads the grass tile from RCT2's `Data/g1.dat`: it
+   **Preview on Grass** reads the grass tile from RCT2's `Data/g1.dat` and the
+   trees to compare with from `ObjData`: it
    finds the RCT2 folder through OpenRCT2's `config.ini` (`game_path`), or
    set the **RCT2 Folder** preference yourself.
 
@@ -208,6 +209,10 @@ supposed to fill its tile.
 rendered sprites as the game would: each of the four views stands on a patch
 of the game's grass with gridlines (`SPR_TERRAIN_GRASS_GRID` from `g1.dat`),
 with *Tiles Around* rings of tiles around the footprint, enlarged by *Zoom*.
+Up to four of RCT2's own trees (*Compare with RCT2 trees*, read from the
+install's `ObjData/*.DAT`) stand beside the object on the same screen row,
+placed with the game's paint offsets, so the generated sprites can be
+compared with the originals in every view.
 The result opens as `terrain_preview.png` / the *RCT Terrain Preview* image
 (in a new window when no Image Editor is open). Without `g1.dat` a stand-in
 grass tile in the game's palette is used. It reads the sprites in the output

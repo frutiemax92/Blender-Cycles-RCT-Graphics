@@ -76,16 +76,24 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         min=0,
     )
 
-    small_anchor: EnumProperty(
-        name="Placement",
+    small_shape: EnumProperty(
+        name="Shape",
         description=(
-            "How the game positions the object on its tile. Sprite offsets are "
-            "computed from it, so the images JSON never needs manual edits"
+            "How the object occupies its tile. The game anchors the sprite "
+            "differently for each shape; offsets are computed from it so the "
+            "images JSON never needs manual edits"
         ),
         items=(
-            ("FULL", "Full / Quarter Tile", "Default full-tile or quarter-tile scenery (paint offset 15, 15)"),
-            ("CENTRED", "Full Tile, Centred / Half Tile", "Objects flagged 'isStackable'-style voffset centre, or half-tile objects (paint offset 3, 3)"),
-            ("NO_WALLS", "Full Tile, Centred, No Walls", "Voffset centre combined with 'prohibitWalls' (paint offset 1, 1)"),
+            ("FULL", "Full Tile", "Occupies the whole tile (shape 4/4)"),
+            ("THREE_QUARTERS", "Three Quarters", "Occupies three quarters (shape 3/4)"),
+            ("HALF", "Half Tile", "Occupies half a tile (shape 2/4)"),
+            ("QUARTER", "Quarter Tile", "Occupies one quarter; model it around the origin (shape 1/4)"),
+            ("FULL_CENTRED", "Full Tile, Centred", "Full tile with SMALL_SCENERY_FLAG_VOFFSET_CENTRE"),
+            (
+                "FULL_CENTRED_NO_WALLS",
+                "Full Tile, Centred, No Walls",
+                "Full tile with SMALL_SCENERY_FLAG_VOFFSET_CENTRE and prohibitWalls",
+            ),
         ),
         default="FULL",
     )
@@ -108,6 +116,56 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         description="Scene frames between two rendered animation frames",
         default=1,
         min=1,
+    )
+
+    # Object description (object.json) ----------------------------------
+
+    object_id: StringProperty(
+        name="Object ID",
+        description="Unique identifier, usually author.type.name (also the .parkobj file name)",
+        default="custom.scenery.my_object",
+    )
+
+    object_name: StringProperty(
+        name="Name",
+        description="Name shown in the game (en-GB)",
+        default="My Object",
+    )
+
+    object_authors: StringProperty(
+        name="Authors",
+        description="Comma separated list of authors",
+        default="",
+    )
+
+    price: IntProperty(name="Price", description="Build price", default=10, min=0)
+
+    removal_price: IntProperty(name="Removal Price", description="Removal price (small and large scenery)", default=0)
+
+    scenery_group: StringProperty(
+        name="Scenery Group",
+        description="Optional scenery group object ID to list the object in",
+        default="",
+    )
+
+    animation_delay: IntProperty(
+        name="Animation Delay",
+        description="Game ticks per animation frame, as a power of two (frame = ticks >> delay)",
+        default=2,
+        min=0,
+        max=15,
+    )
+
+    build_parkobj: BoolProperty(
+        name="Build .parkobj After Render",
+        description="Write object.json and pack the .parkobj after every render",
+        default=False,
+    )
+
+    copy_to_openrct2: BoolProperty(
+        name="Copy to OpenRCT2",
+        description="Copy the .parkobj into OpenRCT2's object folder (set it in the add-on preferences)",
+        default=False,
     )
 
     check_after_render: BoolProperty(

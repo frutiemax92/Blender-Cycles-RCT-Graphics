@@ -9,14 +9,26 @@ the top corner of tile ``tile_center`` plus the game paint offset
 
 from . import projection
 
-# Paint offsets used by Paint.SmallScenery.cpp, per placement type.
-SMALL_SCENERY_ANCHORS = {
-    # Full tile objects, and quarter tile objects modelled around the origin.
-    "FULL": (15, 15, 0),
-    # Full tile objects with SMALL_SCENERY_FLAG_VOFFSET_CENTRE, half tile objects.
-    "CENTRED": (3, 3, 0),
-    # VOFFSET_CENTRE combined with PROHIBIT_WALLS.
-    "NO_WALLS": (1, 1, 0),
+# Small scenery shapes: JSON shape/flags and the paint offset that
+# Paint.SmallScenery.cpp anchors the sprite on.
+SMALL_SCENERY_SHAPES = {
+    "FULL": {"shape": "4/4", "flags": {}, "offset": (15, 15, 0)},
+    "THREE_QUARTERS": {"shape": "3/4", "flags": {}, "offset": (15, 15, 0)},
+    "HALF": {"shape": "2/4", "flags": {}, "offset": (3, 3, 0)},
+    # Quarter tile objects are anchored one unit before their quadrant's
+    # centre, the same as full tile objects relative to the tile centre, so
+    # they are modelled around the origin too.
+    "QUARTER": {"shape": "1/4", "flags": {}, "offset": (15, 15, 0)},
+    "FULL_CENTRED": {
+        "shape": "4/4",
+        "flags": {"SMALL_SCENERY_FLAG_VOFFSET_CENTRE": True},
+        "offset": (3, 3, 0),
+    },
+    "FULL_CENTRED_NO_WALLS": {
+        "shape": "4/4",
+        "flags": {"SMALL_SCENERY_FLAG_VOFFSET_CENTRE": True, "prohibitWalls": True},
+        "offset": (1, 1, 0),
+    },
 }
 
 
@@ -51,17 +63,20 @@ def animation_frames(count=1, first=1, step=1):
     return [first + i * step for i in range(max(1, count))]
 
 
-def small_scenery(anchor="FULL", frames=(1,), start_index=0):
-    """Four rotations per animation frame: image = start + 4 * frame + view.
+def small_scenery(shape="FULL", frames=(1,), start_index=0):
+    """Images 0-3 are the four rotations of the (first frame of the) object.
 
-    This is the layout animated small scenery uses in Paint.SmallScenery.cpp
-    (``frame * 4 + direction``).
+    Animated objects then store frame k at 4 + 4 * k + view: with
+    SMALL_SCENERY_FLAG_VISIBLE_WHEN_ZOOMED, Paint.SmallScenery.cpp draws
+    ``image + 4 + 4 * frameOffsets[frame] + direction`` instead of the base
+    image.
     """
-    offset = SMALL_SCENERY_ANCHORS[anchor]
-    jobs = []
-    for number, frame in enumerate(frames):
-        for view in range(4):
-            jobs.append(Job(view, frame, start_index + number * 4 + view, offset))
+    offset = SMALL_SCENERY_SHAPES[shape]["offset"]
+    jobs = [Job(view, frames[0], start_index + view, offset) for view in range(4)]
+    if len(frames) > 1:
+        for number, frame in enumerate(frames):
+            for view in range(4):
+                jobs.append(Job(view, frame, start_index + 4 + number * 4 + view, offset))
     return jobs
 
 

@@ -1,9 +1,10 @@
 import os
+import shutil
 
 import bpy
 
-from . import render, scene_setup
-from .core import export, jobs, postprocess
+from . import preferences, render, scene_setup
+from .core import alignment, export, jobs, objectjson, postprocess
 
 
 class RCT_OT_initialize(bpy.types.Operator):
@@ -36,7 +37,7 @@ def build_jobs(props):
         props.animation_frames, props.animation_first_frame, props.animation_frame_step
     )
     if props.object_type == "SMALL":
-        return jobs.small_scenery(props.small_anchor, frames, props.start_index)
+        return jobs.small_scenery(props.small_shape, frames, props.start_index)
     if props.object_type == "WALL":
         return jobs.wall(props.wall_double_sided, props.wall_sloped, props.start_index, frames[0])
     if props.object_type == "LARGE":
@@ -100,11 +101,77 @@ class RCT_OT_render(bpy.types.Operator):
             problems = sum(1 for line in lines if line.startswith("FIX"))
             if problems:
                 message += "; {} alignment problem(s), see the RCT panel".format(problems)
+        if props.build_parkobj:
+            try:
+                message += "; " + export_parkobj(context)
+            except (OSError, ValueError) as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
         self.report({"INFO"}, message)
         return {"FINISHED"}
 
 
-classes = (RCT_OT_initialize, RCT_OT_render)
+def object_info(context, directory):
+    props = context.scene.rct_graphics
+    info = objectjson.ObjectInfo(
+        props.object_id,
+        props.object_name,
+        [a.strip() for a in props.object_authors.split(",")],
+        props.object_type,
+    )
+    info.price = props.price
+    info.removal_price = props.removal_price
+    info.scenery_group = props.scenery_group
+    info.shape = props.small_shape
+    info.frames = props.animation_frames if props.object_type == "SMALL" else 1
+    info.animation_delay = props.animation_delay
+    info.footprint = footprint(props)
+    info.wall_double_sided = props.wall_double_sided
+    info.wall_sloped = props.wall_sloped
+    info.remaps = objectjson.used_remaps(directory)
+    points = render.scene_bounds_points(context.scene, context.view_layer)
+    if len(points):
+        info.clearance = alignment.clearance_from_height(points[:, 2].max())
+    return info
+
+
+def export_parkobj(context):
+    """Write object.json and the .parkobj; returns a status message."""
+    props = context.scene.rct_graphics
+    if not props.object_id.strip():
+        raise ValueError("Set an object ID first")
+    directory = output_directory(props)
+    if not os.path.exists(os.path.join(directory, export.IMAGES_JSON)):
+        raise ValueError("Render the sprites first")
+    path = objectjson.write_parkobj(directory, object_info(context, directory))
+    message = "wrote " + os.path.basename(path)
+    if props.copy_to_openrct2:
+        target = preferences.openrct2_object_directory(context)
+        if target is None:
+            raise ValueError("Set the OpenRCT2 folder in the add-on preferences")
+        os.makedirs(target, exist_ok=True)
+        shutil.copy2(path, os.path.join(target, os.path.basename(path)))
+        message += " and copied it to " + target
+    return message
+
+
+class RCT_OT_export_parkobj(bpy.types.Operator):
+    """Write object.json (keeping manual edits) and pack the sprites into a .parkobj"""
+
+    bl_idname = "rct_graphics.export_parkobj"
+    bl_label = "Build .parkobj"
+
+    def execute(self, context):
+        try:
+            message = export_parkobj(context)
+        except (OSError, ValueError) as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        self.report({"INFO"}, message[0].upper() + message[1:])
+        return {"FINISHED"}
+
+
+classes = (RCT_OT_initialize, RCT_OT_render, RCT_OT_export_parkobj)
 
 
 def register():

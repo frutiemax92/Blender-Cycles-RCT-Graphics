@@ -26,7 +26,7 @@ class RCT_PT_main(bpy.types.Panel):
 
         box = layout.box()
         if props.object_type == "SMALL":
-            box.prop(props, "small_anchor")
+            box.prop(props, "small_shape")
         elif props.object_type == "LARGE":
             row = box.row(align=True)
             row.prop(props, "tiles_width")
@@ -142,6 +142,37 @@ class RCT_PT_materials(bpy.types.Panel):
                 op.remap = remap
 
 
+class RCT_PT_object(bpy.types.Panel):
+    bl_label = "Object Export"
+    bl_idname = "RCT_PT_object"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RCT"
+    bl_parent_id = "RCT_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.rct_graphics
+        layout.prop(props, "object_id")
+        layout.prop(props, "object_name")
+        layout.prop(props, "object_authors")
+        row = layout.row(align=True)
+        row.prop(props, "price")
+        if props.object_type != "WALL":
+            row.prop(props, "removal_price")
+        layout.prop(props, "scenery_group")
+        if props.object_type == "SMALL" and props.animation_frames > 1:
+            layout.prop(props, "animation_delay")
+        layout.prop(props, "build_parkobj")
+        layout.prop(props, "copy_to_openrct2")
+        layout.operator("rct_graphics.export_parkobj", icon="PACKAGE")
+
+
 class RCT_PT_alignment(bpy.types.Panel):
     bl_label = "Alignment"
     bl_idname = "RCT_PT_alignment"
@@ -168,7 +199,7 @@ class RCT_PT_alignment(bpy.types.Panel):
                 box.label(text=line[4:] if line[:4] in ("FIX ", "OK  ") else line, icon=icon)
 
 
-classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_alignment, RCT_PT_render_settings)
+classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_alignment, RCT_PT_object, RCT_PT_render_settings)
 
 
 def register():

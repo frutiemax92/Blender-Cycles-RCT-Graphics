@@ -46,7 +46,7 @@ def run_check(context):
 
     low, high = bounds
     size = footprint(props)
-    for finding in alignment.geometry_report(low, high, props.object_type, size):
+    for finding in alignment.geometry_report(low, high, props.object_type, size, props.small_shape):
         lines.append(("OK  " if finding.ok else "FIX ") + finding.message)
 
     directory = output_directory(props)
@@ -59,7 +59,7 @@ def run_check(context):
     clearance = alignment.clearance_from_height(high[2])
     layouts = [
         layout
-        for layout in alignment.arrangements(props.object_type, clearance, size, props.start_index)
+        for layout in alignment.arrangements(props.object_type, clearance, size, props.start_index, props.small_shape)
         if all(p.image in sprites for p in layout.placements)
     ]
     if not layouts:
@@ -128,7 +128,7 @@ class RCT_OT_snap_to_grid(bpy.types.Operator):
 
     horizontal: BoolProperty(
         name="Tile Edges",
-        description="Fit the footprint to the tile edges (the +X edge for walls)",
+        description="Fit the footprint to the tile edges (the +X edge for walls, the half grid for quarter tiles)",
         default=True,
     )
     height: BoolProperty(
@@ -156,7 +156,7 @@ class RCT_OT_snap_to_grid(bpy.types.Operator):
         points = np.array([tuple(p) for p in points])
         low, high = points.min(axis=0), points.max(axis=0)
         target_low, target_high = alignment.snap_box(
-            low, high, props.object_type, footprint(props), self.horizontal, self.height
+            low, high, props.object_type, footprint(props), self.horizontal, self.height, props.small_shape
         )
 
         transform = Matrix.Identity(4)

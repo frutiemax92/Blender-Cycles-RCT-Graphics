@@ -125,7 +125,8 @@ their cell. The add-on handles both:
    result as `alignment_preview.png` / the *RCT Alignment Preview* image.
 3. **Snap to Grid** fixes the model automatically. It scales and moves the
    selected objects (or everything rendered) so their bounds fill the tile
-   cell (or the +X edge for walls) and a whole number of clearance units.
+   cell (the +X edge for walls, one 2 x 2 BU quadrant centred on the origin
+   for quarter tile objects) and a whole number of clearance units.
 
 Horizontal findings only matter for objects meant to tile: a tree is not
 supposed to fill its tile.

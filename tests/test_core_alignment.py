@@ -99,6 +99,14 @@ class GeometryReportTests(unittest.TestCase):
         low, high = alignment.snap_box((1.7, -1.9, 0), (1.95, 1.9, 1.0), "WALL")
         np.testing.assert_allclose((low[0], high[0]), (1.75, 2.0))
 
+    def test_snap_box_quarter(self):
+        low, high = alignment.snap_box((-1.9, -2.1, 0), (1.9, 2.05, 1.0), "SMALL", shape="QUARTER")
+        np.testing.assert_allclose((low[0], low[1], high[0], high[1]), (-1, -1, 1, 1))
+        findings = alignment.geometry_report((-1, -1, 0), (1, 1, projection.HEIGHT_STEP), "SMALL", shape="QUARTER")
+        self.assertTrue(all(f.ok for f in findings), findings)
+        steps = {a.step for a in alignment.arrangements("SMALL", 0, shape="QUARTER")}
+        self.assertEqual(steps, {16})
+
     def test_large_cell(self):
         cell = alignment.expected_cell("LARGE", (2, 3))
         self.assertEqual(cell["x"], (-6.0, 2.0))

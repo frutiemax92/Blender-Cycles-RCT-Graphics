@@ -122,6 +122,17 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("FIX", self.props.alignment_report)
         self.assertTrue(os.path.exists(os.path.join(self.out, "alignment_preview.png")))
 
+    def test_snap_quarter_tile(self):
+        box = tile_box(size=(3.7, 4.1), height=1.7, center=(0.5, -0.3))
+        self.props.small_shape = "QUARTER"
+        bpy.ops.object.select_all(action="DESELECT")
+        bpy.ops.rct_graphics.snap_to_grid()
+        np.testing.assert_allclose(tuple(box.dimensions), (2.0, 2.0, projection.HEIGHT_STEP), atol=1e-5)
+        np.testing.assert_allclose(tuple(box.location)[:2], (0.0, 0.0), atol=1e-5)
+        self.render()
+        bpy.ops.rct_graphics.check_alignment()
+        self.assertNotIn("FIX", self.props.alignment_report)
+
     def test_parkobj(self):
         tile_box()
         self.props.object_id = "test.scenery_small.box"

@@ -51,26 +51,28 @@ class Arrangement:
         self.step = step
 
 
-def arrangements(object_type, clearance=16, footprint=(1, 1), start_index=0):
+def arrangements(object_type, clearance=16, footprint=(1, 1), start_index=0, shape="FULL"):
     """Test layouts for each view.
 
     clearance: object height in game z units, used for vertical stacking.
     footprint: (width, length) of large scenery in tiles.
     start_index: image index of the object's first sprite.
+    shape: small scenery shape; quarter tile objects repeat every 16 units.
     """
-    result = _arrangements(object_type, clearance, footprint)
+    result = _arrangements(object_type, clearance, footprint, shape)
     for layout in result:
         for placement in layout.placements:
             placement.image += start_index
     return result
 
 
-def _arrangements(object_type, clearance, footprint):
+def _arrangements(object_type, clearance, footprint, shape):
     result = []
     if object_type == "SMALL":
+        step = 16 if shape == "QUARTER" else 32
         for view in range(4):
-            result.append(_row(view, view, "x", 32))
-            result.append(_row(view, view, "y", 32))
+            result.append(_row(view, view, "x", step))
+            result.append(_row(view, view, "y", step))
             if clearance > 0:
                 result.append(_row(view, view, "z", clearance))
     elif object_type == "LARGE":
@@ -225,9 +227,15 @@ def _describe_side(axis, side, delta_units):
     )
 
 
-def expected_cell(object_type, footprint=(1, 1)):
-    """Blender (min, max) per horizontal axis of the cell a tiling model fills."""
+def expected_cell(object_type, footprint=(1, 1), shape="FULL"):
+    """Blender (min, max) per horizontal axis of the cell a tiling model fills.
+
+    Quarter tile small scenery fills one quadrant, modelled around the origin
+    (the half grid).
+    """
     half = projection.TILE_SIZE / 2.0
+    if object_type == "SMALL" and shape == "QUARTER":
+        half /= 2.0
     if object_type == "LARGE":
         width, length = footprint
         return {
@@ -237,7 +245,7 @@ def expected_cell(object_type, footprint=(1, 1)):
     return {"x": (-half, half), "y": (-half, half)}
 
 
-def geometry_report(bounds_min, bounds_max, object_type, footprint=(1, 1)):
+def geometry_report(bounds_min, bounds_max, object_type, footprint=(1, 1), shape="FULL"):
     """Compare a model's world bounds with the grid the game repeats it on.
 
     Returns a list of :class:`Finding`. Horizontal findings only matter for
@@ -245,7 +253,7 @@ def geometry_report(bounds_min, bounds_max, object_type, footprint=(1, 1)):
     supposed to fill its tile. Heights should be a multiple of the clearance
     unit (8 z units) so stacked copies meet exactly.
     """
-    cell = expected_cell(object_type, footprint)
+    cell = expected_cell(object_type, footprint, shape)
     findings = []
     names = {"x": ("-X", "+X"), "y": ("-Y", "+Y")}
     for i, axis in enumerate(("x", "y")):
@@ -288,12 +296,12 @@ def clearance_from_height(top_bu):
     return max(CLEARANCE_UNIT, int(np.ceil(units / CLEARANCE_UNIT - 1e-3)) * CLEARANCE_UNIT)
 
 
-def snap_box(bounds_min, bounds_max, object_type, footprint=(1, 1), snap_horizontal=True, snap_height=True):
-    """Target bounds after snapping to the tile grid and the clearance unit."""
+def snap_box(bounds_min, bounds_max, object_type, footprint=(1, 1), snap_horizontal=True, snap_height=True, shape="FULL"):
+    """Target bounds after snapping to the tile grid (the half grid for quarter tiles) and the clearance unit."""
     target_min = list(bounds_min)
     target_max = list(bounds_max)
     if snap_horizontal:
-        cell = expected_cell(object_type, footprint)
+        cell = expected_cell(object_type, footprint, shape)
         if object_type == "WALL":
             width = bounds_max[0] - bounds_min[0]
             target_max[0] = cell["x"][1]

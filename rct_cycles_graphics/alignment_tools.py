@@ -4,14 +4,16 @@ import os
 
 import bpy
 import numpy as np
-from bpy.props import BoolProperty
+from bpy.props import BoolProperty, IntProperty
 from mathutils import Matrix
 
-from . import render
-from .core import alignment, export, png, projection
+from . import preferences, render
+from .core import alignment, export, g1, png, projection, terrain
 
 PREVIEW_FILE = "alignment_preview.png"
 PREVIEW_IMAGE = "RCT Alignment Preview"
+TERRAIN_FILE = "terrain_preview.png"
+TERRAIN_IMAGE = "RCT Terrain Preview"
 
 
 def model_bounds(context):
@@ -77,19 +79,94 @@ def run_check(context):
     return lines, path
 
 
-def show_preview(context, path):
-    image = bpy.data.images.get(PREVIEW_IMAGE)
+def show_preview(context, path, name=PREVIEW_IMAGE, open_window=False):
+    """Load ``path`` as image ``name`` and show it in an Image Editor.
+
+    open_window: without an Image Editor on screen, open one in a new window.
+    """
+    image = bpy.data.images.get(name)
     if image is None:
         image = bpy.data.images.load(path, check_existing=False)
-        image.name = PREVIEW_IMAGE
+        image.name = name
     else:
         image.filepath = path
         image.reload()
+    if _show_in_image_editor(context, image) or not open_window or context.window is None:
+        return
+    try:
+        # Opens the render view (a new window by default), an Image Editor.
+        bpy.ops.render.view_show("INVOKE_DEFAULT")
+    except RuntimeError:
+        return
+    _show_in_image_editor(context, image)
+
+
+def _show_in_image_editor(context, image):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == "IMAGE_EDITOR":
                 area.spaces.active.image = image
-                return
+                return True
+    return False
+
+
+def grass_tile(context):
+    """The ground tile sprite and whether it is the game's own (from g1.dat)."""
+    path = preferences.g1_path(context)
+    if path is not None:
+        try:
+            sprite = g1.read_sprite(path, g1.GRASS_GRID)
+            return (sprite.indices, sprite.x, sprite.y), True
+        except (OSError, ValueError, IndexError):
+            pass
+    return terrain.fallback_grass(), False
+
+
+def preview_jobs(job_list):
+    """The jobs to draw per view: the first frame, flat, per footprint tile."""
+    chosen = {}
+    for job in job_list:
+        if job.variant is not None:
+            continue
+        key = (job.view, job.tile)
+        if key not in chosen or job.index < chosen[key].index:
+            chosen[key] = job
+    views = []
+    for view in range(4):
+        group = [job for (v, _), job in sorted(chosen.items(), key=lambda item: item[1].index) if v == view]
+        # Large scenery: the per-tile images, not the whole-object preview.
+        if any(job.tile is not None for job in group):
+            group = [job for job in group if job.tile is not None]
+        views.append(group)
+    return views
+
+
+def run_terrain_preview(context, margin=2, scale=2):
+    """Composite the rendered sprites on grass in the four views.
+
+    Returns (preview path, whether the game's grass was used).
+    """
+    from .operators import build_jobs, footprint, output_directory
+
+    props = context.scene.rct_graphics
+    directory = output_directory(props)
+    if not os.path.exists(os.path.join(directory, export.IMAGES_JSON)):
+        raise ValueError("Render the sprites first")
+    sprites = export.load_sprites(directory)
+    ground, from_game = grass_tile(context)
+    tiles = terrain.ground_tiles(footprint(props), margin)
+
+    views = []
+    drawn = 0
+    for view, group in enumerate(preview_jobs(build_jobs(props))):
+        placements = [(job.index, job.anchor(), job.tile_center) for job in group if job.index in sprites]
+        drawn += len(placements)
+        views.append(terrain.compose_view(view, ground, tiles, sprites, placements))
+    if not drawn:
+        raise ValueError("The images in the output folder do not match the object type")
+    path = os.path.join(directory, TERRAIN_FILE)
+    png.write_rgba(path, terrain.preview_sheet(views, scale=scale))
+    return path, from_game
 
 
 def store_report(scene, lines):
@@ -116,6 +193,41 @@ class RCT_OT_check_alignment(bpy.types.Operator):
             self.report({"WARNING"}, "{} alignment problem(s), see the RCT panel".format(len(problems)))
         else:
             self.report({"INFO"}, "Model aligned with the grid")
+        return {"FINISHED"}
+
+
+class RCT_OT_terrain_preview(bpy.types.Operator):
+    """Show the rendered sprites on the game's grass with gridlines, in all four views"""
+
+    bl_idname = "rct_graphics.terrain_preview"
+    bl_label = "Preview on Grass"
+
+    margin: IntProperty(
+        name="Tiles Around",
+        description="Rings of grass tiles drawn around the object's footprint",
+        default=2,
+        min=0,
+        max=8,
+    )
+    scale: IntProperty(
+        name="Zoom",
+        description="Pixel size of the preview image (the game's zoom-in levels)",
+        default=2,
+        min=1,
+        max=4,
+    )
+
+    def execute(self, context):
+        try:
+            path, from_game = run_terrain_preview(context, self.margin, self.scale)
+        except (OSError, ValueError) as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        show_preview(context, path, TERRAIN_IMAGE, open_window=True)
+        if from_game:
+            self.report({"INFO"}, "Terrain preview written to " + path)
+        else:
+            self.report({"WARNING"}, "RCT2's g1.dat not found (see the add-on preferences): using a stand-in grass")
         return {"FINISHED"}
 
 
@@ -185,7 +297,7 @@ def _vec(values):
     return Vector(values)
 
 
-classes = (RCT_OT_check_alignment, RCT_OT_snap_to_grid)
+classes = (RCT_OT_check_alignment, RCT_OT_terrain_preview, RCT_OT_snap_to_grid)
 
 
 def register():

@@ -21,7 +21,7 @@ sys.path.insert(0, ROOT)
 
 import rct_cycles_graphics as addon  # noqa: E402
 from rct_cycles_graphics import materials, render, tree_generator  # noqa: E402
-from rct_cycles_graphics.core import export, jobs, palette, postprocess, projection, tree  # noqa: E402
+from rct_cycles_graphics.core import export, jobs, palette, png, postprocess, projection, tree  # noqa: E402
 
 
 def reset_scene():
@@ -284,6 +284,24 @@ class TreeTests(unittest.TestCase):
         self.assertEqual((self.props.object_type, self.props.tiles_width, self.props.tiles_length), ("LARGE", 2, 2))
         self.assertTrue(self.props.flag_large_isTree)
         self.assertEqual(len(self.render()), 4 + 4 * 4)
+
+    def test_terrain_preview(self):
+        self.add()
+        with self.assertRaisesRegex(RuntimeError, "Render the sprites first"):
+            bpy.ops.rct_graphics.terrain_preview(scale=1)
+        self.render()
+        self.assertEqual(bpy.ops.rct_graphics.terrain_preview(margin=1, scale=1), {"FINISHED"})
+        indices, _ = png.read_indexed(os.path.join(self.out, "images", "0000.png"))
+        image = bpy.data.images["RCT Terrain Preview"]
+        width, height = image.size
+        # Four views of 3 x 3 tiles (192 px wide each) plus spacing.
+        self.assertGreaterEqual(width, 4 * 192 + 3 * 8)
+        self.assertGreater(height, indices.shape[0])
+        pixels = np.array(image.pixels[:]).reshape(height, width, 4)
+        greens = np.round(palette.PALETTE[70:75] / 255.0, 3)
+        rgb = np.round(pixels[..., :3], 3).reshape(-1, 3)
+        grass = (rgb[:, None, :] == greens[None, :, :]).all(axis=-1).any(axis=-1)
+        self.assertGreater(grass.sum(), 4 * 9 * 1024 // 4)
 
     def test_scene_mismatch(self):
         obj = self.add()

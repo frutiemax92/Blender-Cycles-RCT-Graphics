@@ -130,7 +130,9 @@ def camera_placement(bounds, view, distance):
     target = right * (cx / PIXELS_PER_BU) - up * (cy / PIXELS_PER_BU)
     location = target - forward * distance
     rotation = (CAMERA_TILT, 0.0, CAMERA_HEADING + view_angle(view))
-    ortho_scale = max(width, height) / PIXELS_PER_BU
+    # The camera's sensor fit is HORIZONTAL: the orthographic scale spans the
+    # image width whatever the aspect ratio.
+    ortho_scale = width / PIXELS_PER_BU
     return {
         "location": tuple(location),
         "rotation": rotation,

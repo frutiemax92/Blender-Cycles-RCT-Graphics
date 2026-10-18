@@ -61,6 +61,9 @@ class ProjectionTests(unittest.TestCase):
         self.assertAlmostEqual(py, -bounds[1])
         self.assertAlmostEqual(np.dot(forward, right), 0.0)
         self.assertAlmostEqual(forward[2], -0.5)
+        # Sensor fit is horizontal: one pixel is 1 / PIXELS_PER_BU wide even
+        # for images taller than wide.
+        self.assertAlmostEqual(placement["ortho_scale"] * proj.PIXELS_PER_BU, bounds[2] - bounds[0])
 
 
 if __name__ == "__main__":

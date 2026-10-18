@@ -130,8 +130,12 @@ def set_view(scene, view, bounds):
     scene.render.pixel_aspect_y = 1.0
 
 
-def build_tile_grid(scene, width, length):
-    """Non-rendering wireframe showing the tile footprint (tiles extend to -X/-Y)."""
+def build_tile_grid(scene, width, length, wall=False):
+    """Non-rendering wireframe showing the tile footprint (tiles extend to -X/-Y).
+
+    With ``wall`` it also outlines the +X edge where walls must be modelled,
+    one land step high.
+    """
     collection = _rig_collection(scene)
     size = projection.TILE_SIZE
     half = size / 2.0
@@ -147,6 +151,11 @@ def build_tile_grid(scene, width, length):
         y = half - j * size
         verts += [(half, y, 0.0), (half - width * size, y, 0.0)]
         edges.append((len(verts) - 2, len(verts) - 1))
+    if wall:
+        top = projection.HEIGHT_STEP
+        start = len(verts)
+        verts += [(half, half, 0.0), (half, half, top), (half, -half, top), (half, -half, 0.0)]
+        edges += [(start, start + 1), (start + 1, start + 2), (start + 2, start + 3)]
     mesh = bpy.data.meshes.get(GRID_NAME)
     if mesh is not None:
         old = bpy.data.objects.get(GRID_NAME)

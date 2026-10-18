@@ -37,6 +37,8 @@ def build_jobs(props):
     )
     if props.object_type == "SMALL":
         return jobs.small_scenery(props.small_anchor, frames, props.start_index)
+    if props.object_type == "WALL":
+        return jobs.wall(props.wall_double_sided, props.wall_sloped, props.start_index, frames[0])
     if props.object_type == "LARGE":
         return jobs.large_scenery(props.tiles_width, props.tiles_length, props.start_index, frames[0])
     raise ValueError("Unsupported object type " + props.object_type)

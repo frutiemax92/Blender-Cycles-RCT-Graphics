@@ -65,6 +65,59 @@ def small_scenery(anchor="FULL", frames=(1,), start_index=0):
     return jobs
 
 
+# Wall images, from Paint.Wall.cpp. The model stands on the tile's +X edge in
+# Blender, which is the game's x = 0 edge (direction 0). Rendering view k
+# shows it on the edge of direction k. Each entry is
+# image offset -> (view, paint offset, slope variant), where slope "up" is
+# the game's EDGE_SLOPE_UPWARDS (1) and "down" EDGE_SLOPE_DOWNWARDS (2).
+WALL_IMAGES = {
+    0: (3, (2, 1, 0), None),
+    1: (0, (0, 0, 0), None),
+    2: (3, (2, 1, 0), "up"),
+    3: (0, (0, 0, 0), "down"),
+    4: (3, (2, 1, 0), "down"),
+    5: (0, (0, 0, 0), "up"),
+}
+# Double sided walls show their other face on the near edges (directions 1, 2).
+WALL_BACK_IMAGES = {
+    6: (1, (1, 31, 0), None),
+    7: (2, (31, 0, 0), None),
+    8: (1, (1, 31, 0), "down"),
+    9: (2, (31, 0, 0), "up"),
+    10: (1, (1, 31, 0), "up"),
+    11: (2, (31, 0, 0), "down"),
+}
+
+
+def wall(double_sided=False, sloped=False, start_index=0, frame=1):
+    """Jobs for a wall: images 0-1 flat, 2-5 sloped, 6-11 the back face."""
+    layout = dict(WALL_IMAGES)
+    if double_sided:
+        layout.update(WALL_BACK_IMAGES)
+    jobs = []
+    for offset, (view, game_offset, slope) in sorted(layout.items()):
+        if slope is not None and not sloped:
+            continue
+        jobs.append(Job(view, frame, start_index + offset, game_offset, variant=slope))
+    return jobs
+
+
+def wall_slope_matrix(slope):
+    """4x4 world-space shear raising a wall on the +X edge by one land step.
+
+    "up" rises towards game +y (Blender -Y), "down" towards Blender +Y.
+    """
+    rise = projection.HEIGHT_STEP / projection.TILE_SIZE
+    half = projection.HEIGHT_STEP / 2.0
+    dz_dy = -rise if slope == "up" else rise
+    return (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, dz_dy, 1.0, half),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+
+
 def large_scenery_tiles(width, length):
     """Tiles of a ``width`` x ``length`` footprint in sequence order.
 

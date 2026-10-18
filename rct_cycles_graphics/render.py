@@ -55,6 +55,49 @@ def _vector(values):
     return Vector(values)
 
 
+class _sheared:
+    """Temporarily apply a world-space 4x4 matrix to every rendered object.
+
+    Root objects are parented to a temporary empty with the matrix as parent
+    inverse, which (unlike loc/rot/scale) can hold a shear.
+    """
+
+    def __init__(self, scene, view_layer, matrix):
+        self.scene = scene
+        self.view_layer = view_layer
+        self.matrix = matrix
+        self.saved = []
+        self.empty = None
+
+    def __enter__(self):
+        from mathutils import Matrix
+
+        self.empty = bpy.data.objects.new("RCT_TempShear", None)
+        self.scene.collection.objects.link(self.empty)
+        shear = Matrix(self.matrix)
+        roots = {_root(obj) for obj in renderable_objects(self.scene, self.view_layer)}
+        for obj in roots:
+            self.saved.append((obj, obj.matrix_parent_inverse.copy()))
+            obj.parent = self.empty
+            obj.matrix_parent_inverse = shear
+        bpy.context.view_layer.update()
+        return self
+
+    def __exit__(self, *exc):
+        for obj, parent_inverse in self.saved:
+            obj.parent = None
+            obj.matrix_parent_inverse = parent_inverse
+        bpy.data.objects.remove(self.empty, do_unlink=True)
+        bpy.context.view_layer.update()
+        return False
+
+
+def _root(obj):
+    while obj.parent is not None:
+        obj = obj.parent
+    return obj
+
+
 class _SceneState:
     """Saves and restores the render settings the renderer touches."""
 
@@ -159,16 +202,23 @@ class Renderer:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         return False
 
-    def render(self, view, frame):
+    def render(self, view, frame, variant=None):
         scene = self.scene
         scene.frame_set(frame)
+        if variant in ("up", "down"):
+            with _sheared(scene, self.view_layer, jobs_core.wall_slope_matrix(variant)):
+                return self._render(view, frame, variant)
+        return self._render(view, frame, variant)
+
+    def _render(self, view, frame, variant):
+        scene = self.scene
         points = scene_bounds_points(scene, self.view_layer)
         if len(points) == 0:
             return None
         bounds = projection.screen_bounds(points, view)
         scene_setup.set_view(scene, view, bounds)
 
-        path = os.path.join(self.temp_dir, "view{}_frame{}.exr".format(view, frame))
+        path = os.path.join(self.temp_dir, "view{}_frame{}_{}.exr".format(view, frame, variant))
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True, scene=scene.name, layer=self.view_layer.name)
 
@@ -200,8 +250,8 @@ def run_jobs(context, jobs, settings, progress=None, footprint=(1, 1)):
 
     with Renderer(context) as renderer:
         for step, (key, group) in enumerate(sorted(groups.items(), key=lambda item: _sort_key(item[0]))):
-            view, frame, _variant = key
-            result = renderer.render(view, frame)
+            view, frame, variant = key
+            result = renderer.render(view, frame, variant)
             if result is None:
                 for job in group:
                     sprites[job.index] = postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)

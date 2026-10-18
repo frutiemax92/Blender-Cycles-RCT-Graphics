@@ -32,11 +32,15 @@ class RCT_PT_main(bpy.types.Panel):
             row.prop(props, "tiles_width")
             row.prop(props, "tiles_length")
             box.label(text="Tiles extend from the origin tile towards -X / -Y", icon="INFO")
+        elif props.object_type == "WALL":
+            box.prop(props, "wall_double_sided")
+            box.prop(props, "wall_sloped")
+            box.label(text="Model the wall on the tile's +X edge", icon="INFO")
 
         box = layout.box()
         box.prop(props, "animation_frames")
-        if props.object_type == "LARGE":
-            box.label(text="Large scenery renders the first frame only")
+        if props.object_type in {"LARGE", "WALL"}:
+            box.label(text="Only the first frame is rendered for this type")
         elif props.animation_frames > 1:
             row = box.row(align=True)
             row.prop(props, "animation_first_frame")

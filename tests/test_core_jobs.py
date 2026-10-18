@@ -129,3 +129,25 @@ class LargeSceneryTests(unittest.TestCase):
         position[0, 2] *= 0.5
         tiles = jobs.tile_map(position, alpha, 2, 2)
         np.testing.assert_array_equal(tiles, [[0, 1, 3, 1]])
+
+
+class WallTests(unittest.TestCase):
+    def test_wall_image_layout(self):
+        self.assertEqual([j.index for j in jobs.wall()], [0, 1])
+        self.assertEqual([j.index for j in jobs.wall(sloped=True)], list(range(6)))
+        self.assertEqual([j.index for j in jobs.wall(True, True)], list(range(12)))
+        self.assertEqual([j.index for j in jobs.wall(True, False)], [0, 1, 6, 7])
+
+    def test_wall_anchors(self):
+        anchors = {j.index: j.anchor() for j in jobs.wall(True, False)}
+        # Top corner is (0, -16); add Translate3DTo2DWithZ of the paint offsets.
+        self.assertEqual(anchors, {0: (-1, -15), 1: (0, -16), 6: (30, 0), 7: (-31, -1)})
+
+    def test_slope_matrix_raises_one_step(self):
+        from rct_cycles_graphics.core import projection
+
+        m = np.array(jobs.wall_slope_matrix("up"))
+        low = m @ np.array([2.0, 2.0, 0.0, 1.0])
+        high = m @ np.array([2.0, -2.0, 0.0, 1.0])
+        self.assertAlmostEqual(low[2], 0.0)
+        self.assertAlmostEqual(high[2], projection.HEIGHT_STEP)

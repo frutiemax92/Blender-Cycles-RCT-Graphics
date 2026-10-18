@@ -17,7 +17,7 @@ def _update_footprint(self, context):
     if self.object_type == "LARGE":
         scene_setup.build_tile_grid(context.scene, self.tiles_width, self.tiles_length)
     else:
-        scene_setup.build_tile_grid(context.scene, 1, 1)
+        scene_setup.build_tile_grid(context.scene, 1, 1, wall=self.object_type == "WALL")
 
 
 class RCTGraphicsProperties(bpy.types.PropertyGroup):
@@ -30,6 +30,18 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         ),
         default="SMALL",
         update=_update_footprint,
+    )
+
+    wall_double_sided: BoolProperty(
+        name="Double Sided",
+        description="Also render the back face, seen when the wall is on a near edge (images 6-11)",
+        default=False,
+    )
+
+    wall_sloped: BoolProperty(
+        name="Sloped",
+        description="Also render the wall on sloped land (images 2-5)",
+        default=True,
     )
 
     tiles_width: IntProperty(

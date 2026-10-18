@@ -37,7 +37,8 @@ See [specifications.md](specifications.md) for the original goals.
 4. Pick the **Object Type**, model the object on the grid and click
    **Render Sprites**.
 5. The output folder now holds `images/NNNN.png`, `images.json` and, after
-   **Build .parkobj**, `object.json` and `<id>.parkobj`.
+   **Build .parkobj** (which renders the sprites again first), `object.json`
+   and `<id>.parkobj`.
 
 ## Scene conventions
 

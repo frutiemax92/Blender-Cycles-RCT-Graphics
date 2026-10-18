@@ -173,7 +173,10 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(len(data["images"]), 4)
         self.assertIs(data["properties"]["isStackable"], True)
         self.props.flag_small_isStackable = False
-        bpy.ops.rct_graphics.export_parkobj()
+        # The button renders the sprites again before packing them.
+        os.remove(os.path.join(self.out, "images", "0003.png"))
+        self.assertEqual(bpy.ops.rct_graphics.export_parkobj(), {"FINISHED"})
+        self.assertTrue(os.path.exists(os.path.join(self.out, "images", "0003.png")))
         with zipfile.ZipFile(path) as archive:
             data = json.loads(archive.read("object.json"))
         self.assertIs(data["properties"]["isStackable"], False)

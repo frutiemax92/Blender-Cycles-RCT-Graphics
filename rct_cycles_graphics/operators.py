@@ -59,6 +59,40 @@ def output_directory(props):
     return os.path.abspath(bpy.path.abspath(props.output_directory))
 
 
+def render_sprites(context):
+    """Render every sprite and write them with images.json; returns a status message."""
+    props = context.scene.rct_graphics
+    directory = output_directory(props)
+    job_list = build_jobs(props)
+
+    window_manager = context.window_manager
+    window_manager.progress_begin(0, 1)
+
+    def progress(done, total):
+        window_manager.progress_update(done / total)
+
+    try:
+        sprites = render.run_jobs(
+            context, job_list, postprocess_settings(props), progress, footprint(props)
+        )
+    finally:
+        window_manager.progress_end()
+
+    export.write_sprites(directory, sprites)
+    message = "Rendered {} sprites to {}".format(len(sprites), directory)
+    if props.check_after_render:
+        from . import alignment_tools
+
+        lines, path = alignment_tools.run_check(context)
+        alignment_tools.store_report(context.scene, lines)
+        if path is not None:
+            alignment_tools.show_preview(context, path)
+        problems = sum(1 for line in lines if line.startswith("FIX"))
+        if problems:
+            message += "; {} alignment problem(s), see the RCT panel".format(problems)
+    return message
+
+
 class RCT_OT_render(bpy.types.Operator):
     """Render all sprites of the object and write them with the images JSON"""
 
@@ -72,43 +106,14 @@ class RCT_OT_render(bpy.types.Operator):
     def execute(self, context):
         props = context.scene.rct_graphics
         try:
-            directory = output_directory(props)
-            job_list = build_jobs(props)
-        except ValueError as error:
+            if props.build_parkobj:
+                check_object_id(props)
+            message = render_sprites(context)
+            if props.build_parkobj:
+                message += "; " + export_parkobj(context)
+        except (OSError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
-
-        window_manager = context.window_manager
-        window_manager.progress_begin(0, 1)
-
-        def progress(done, total):
-            window_manager.progress_update(done / total)
-
-        try:
-            sprites = render.run_jobs(
-                context, job_list, postprocess_settings(props), progress, footprint(props)
-            )
-        finally:
-            window_manager.progress_end()
-
-        export.write_sprites(directory, sprites)
-        message = "Rendered {} sprites to {}".format(len(sprites), directory)
-        if props.check_after_render:
-            from . import alignment_tools
-
-            lines, path = alignment_tools.run_check(context)
-            alignment_tools.store_report(context.scene, lines)
-            if path is not None:
-                alignment_tools.show_preview(context, path)
-            problems = sum(1 for line in lines if line.startswith("FIX"))
-            if problems:
-                message += "; {} alignment problem(s), see the RCT panel".format(problems)
-        if props.build_parkobj:
-            try:
-                message += "; " + export_parkobj(context)
-            except (OSError, ValueError) as error:
-                self.report({"ERROR"}, str(error))
-                return {"CANCELLED"}
         self.report({"INFO"}, message)
         return {"FINISHED"}
 
@@ -141,11 +146,15 @@ def object_info(context, directory):
     return info
 
 
+def check_object_id(props):
+    if not props.object_id.strip():
+        raise ValueError("Set an object ID first")
+
+
 def export_parkobj(context):
     """Write object.json and the .parkobj; returns a status message."""
     props = context.scene.rct_graphics
-    if not props.object_id.strip():
-        raise ValueError("Set an object ID first")
+    check_object_id(props)
     directory = output_directory(props)
     if not os.path.exists(os.path.join(directory, export.IMAGES_JSON)):
         raise ValueError("Render the sprites first")
@@ -162,18 +171,23 @@ def export_parkobj(context):
 
 
 class RCT_OT_export_parkobj(bpy.types.Operator):
-    """Write object.json (keeping manual edits) and pack the sprites into a .parkobj"""
+    """Render the sprites, write object.json (keeping manual edits) and pack them into a .parkobj"""
 
     bl_idname = "rct_graphics.export_parkobj"
     bl_label = "Build .parkobj"
 
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
     def execute(self, context):
         try:
-            message = export_parkobj(context)
+            check_object_id(context.scene.rct_graphics)
+            message = render_sprites(context) + "; " + export_parkobj(context)
         except (OSError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
-        self.report({"INFO"}, message[0].upper() + message[1:])
+        self.report({"INFO"}, message)
         return {"FINISHED"}
 
 

@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "rct_cycles_graphics"
+version = "0.1.0"
+name = "RCT Cycles Graphics"
+tagline = "Render OpenRCT2 object sprites with Cycles"
+maintainer = "frutiemax92"
+type = "add-on"
+
+website = "https://github.com/frutiemax92/Blender-Cycles-RCT-Graphics"
+tags = ["Render", "Import-Export"]
+
+blender_version_min = "4.2.0"
+license = ["SPDX:MIT"]
+
+[permissions]
+files = "Writes rendered sprites, object.json and .parkobj files to the output folder"

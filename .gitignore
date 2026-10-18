@@ -1,0 +1,11 @@
+# Reference material kept locally, not part of the add-on
+/Blender-RCT-Graphics/
+/OpenRCT2/
+/examples/
+
+__pycache__/
+*.pyc
+*.blend1
+/build/
+/dist/
+.pytest_cache/

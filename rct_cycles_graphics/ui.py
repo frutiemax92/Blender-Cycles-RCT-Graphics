@@ -1,6 +1,6 @@
 import bpy
 
-from . import scene_setup
+from . import materials, scene_setup
 
 
 class RCT_PT_main(bpy.types.Panel):
@@ -70,7 +70,53 @@ class RCT_PT_render_settings(bpy.types.Panel):
         sub.prop(props, "dither_strength")
 
 
-classes = (RCT_PT_main, RCT_PT_render_settings)
+class RCT_PT_materials(bpy.types.Panel):
+    bl_label = "Recolourable Materials"
+    bl_idname = "RCT_PT_materials"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RCT"
+    bl_parent_id = "RCT_PT_main"
+
+    @classmethod
+    def poll(cls, context):
+        return scene_setup.get_rig(context.scene)[0] is not None
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.active_object
+        if obj is None or not hasattr(obj.data, "materials"):
+            layout.label(text="Select an object")
+            return
+
+        row = layout.row(align=True)
+        row.label(text="Add:")
+        for remap in (1, 2, 3):
+            row.operator("rct_graphics.add_remap_material", text=str(remap)).remap = remap
+
+        for slot in obj.material_slots:
+            if slot.material is None:
+                continue
+            remap = materials.get_remap(slot.material)
+            text = slot.material.name
+            if remap:
+                text += "  (Remap {})".format(remap)
+            layout.label(text=text, icon="MATERIAL")
+
+        material = obj.active_material
+        if material is not None:
+            layout.label(text="Active: " + material.name)
+            row = layout.row(align=True)
+            for remap, label in ((0, "Plain"), (1, "Remap 1"), (2, "Remap 2"), (3, "Remap 3")):
+                op = row.operator(
+                    "rct_graphics.set_material_remap",
+                    text=label,
+                    depress=materials.get_remap(material) == remap,
+                )
+                op.remap = remap
+
+
+classes = (RCT_PT_main, RCT_PT_materials, RCT_PT_render_settings)
 
 
 def register():

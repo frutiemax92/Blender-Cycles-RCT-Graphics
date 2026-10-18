@@ -17,7 +17,7 @@ bl_info = {
 
 import importlib
 
-_module_names = ("properties", "operators", "ui")
+_module_names = ("properties", "operators", "materials", "ui")
 
 _modules = []
 

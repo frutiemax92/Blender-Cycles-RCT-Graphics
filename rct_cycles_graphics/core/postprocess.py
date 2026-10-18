@@ -25,6 +25,28 @@ def silhouette(alpha, threshold):
     return alpha >= threshold
 
 
+def luminance(rgb):
+    return rgb[..., 0] * 0.299 + rgb[..., 1] * 0.587 + rgb[..., 2] * 0.114
+
+
+def project_onto_ramp(rgb, indices):
+    """Replace colours by the ramp colour of equal luminance.
+
+    Recolourable pixels only carry brightness information: the game swaps
+    the ramp for the player's colour choice.
+    """
+    ramp = palette.PALETTE[list(indices)].astype(np.float32)
+    ramp_lum = luminance(ramp)
+    lum = luminance(rgb)
+    return np.stack([np.interp(lum, ramp_lum, ramp[:, c]) for c in range(3)], axis=-1)
+
+
+def remap_classes(remap_aov, alpha):
+    """Integer remap number per pixel from the (premultiplied) AOV."""
+    safe = np.where(alpha > 1e-6, alpha, 1.0)
+    return np.clip(np.rint(remap_aov / safe), 0, 3).astype(np.int32)
+
+
 def bounding_box(mask):
     """(x0, y0, x1, y1) of the True pixels, or None when the mask is empty."""
     rows = np.flatnonzero(mask.any(axis=1))
@@ -71,6 +93,8 @@ def to_indices(rgba_linear, settings, remap=None, mask=None):
     allowed = {0: palette.normal_indices(settings.ramps, used)}
     for remap_number in used:
         allowed[remap_number] = palette.remap_indices(remap_number)
+        selected = classes == remap_number
+        rgb[selected] = project_onto_ramp(rgb[selected], allowed[remap_number])
     return quantize.quantize(
         rgb, classes, allowed, method=settings.dither_method, strength=settings.dither_strength
     )

@@ -45,3 +45,28 @@ class SpriteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RemapTests(unittest.TestCase):
+    def test_remap_ramps_have_increasing_luminance(self):
+        from rct_cycles_graphics.core import palette
+
+        for remap, indices in palette.REMAP_RANGES.items():
+            lum = postprocess.luminance(palette.PALETTE[list(indices)].astype(np.float32))
+            self.assertTrue(np.all(np.diff(lum) > 0), remap)
+
+    def test_remap_pixels_stay_in_their_ramp(self):
+        from rct_cycles_graphics.core import palette
+
+        rgba = np.zeros((4, 4, 4), dtype=np.float32)
+        rgba[...] = (0.2, 0.5, 0.1, 1.0)
+        remap = np.zeros((4, 4), dtype=np.int32)
+        remap[:, 2:] = 2
+        out = postprocess.to_indices(rgba, postprocess.Settings(), remap=remap)
+        self.assertTrue(set(out[:, 2:].ravel()) <= set(palette.REMAP_RANGES[2]))
+        self.assertFalse(set(out[:, :2].ravel()) & set(palette.REMAP_RANGES[2]))
+
+    def test_remap_classes_from_premultiplied_aov(self):
+        alpha = np.array([[1.0, 0.5, 0.0]])
+        aov = np.array([[2.0, 1.0, 0.0]])
+        np.testing.assert_array_equal(postprocess.remap_classes(aov, alpha), [[2, 2, 0]])

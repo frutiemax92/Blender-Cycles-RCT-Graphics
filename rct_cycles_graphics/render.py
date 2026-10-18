@@ -115,7 +115,7 @@ def _read_exr(path):
         subimage = 0
         while image.seek_subimage(subimage, 0):
             spec = image.spec()
-            pixels = image.read_image(0, spec.nchannels, "float")
+            pixels = image.read_image(subimage, 0, 0, spec.nchannels, "float")
             pixels = np.asarray(pixels, dtype=np.float32).reshape(spec.height, spec.width, spec.nchannels)
             for i, name in enumerate(spec.channelnames):
                 channels[name] = pixels[..., i]
@@ -208,6 +208,9 @@ def run_jobs(context, jobs, settings, progress=None):
 def _make_sprite(result, job, settings):
     if result is None:
         return postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)
-    indices = postprocess.to_indices(result.rgba, settings)
+    remap = None
+    if result.remap is not None:
+        remap = postprocess.remap_classes(result.remap, result.rgba[..., 3])
+    indices = postprocess.to_indices(result.rgba, settings, remap=remap)
     x0, y0 = result.bounds[0], result.bounds[1]
     return postprocess.make_sprite(indices, x0, y0, job.anchor())

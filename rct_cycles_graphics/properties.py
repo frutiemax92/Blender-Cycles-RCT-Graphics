@@ -27,6 +27,27 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         default="//rct_output",
     )
 
+    start_index: IntProperty(
+        name="First Image Index",
+        description="Index in the object's image table of the first rendered sprite",
+        default=0,
+        min=0,
+    )
+
+    small_anchor: EnumProperty(
+        name="Placement",
+        description=(
+            "How the game positions the object on its tile. Sprite offsets are "
+            "computed from it, so the images JSON never needs manual edits"
+        ),
+        items=(
+            ("FULL", "Full / Quarter Tile", "Default full-tile or quarter-tile scenery (paint offset 15, 15)"),
+            ("CENTRED", "Full Tile, Centred / Half Tile", "Objects flagged 'isStackable'-style voffset centre, or half-tile objects (paint offset 3, 3)"),
+            ("NO_WALLS", "Full Tile, Centred, No Walls", "Voffset centre combined with 'prohibitWalls' (paint offset 1, 1)"),
+        ),
+        default="FULL",
+    )
+
     # Rendering -----------------------------------------------------------
 
     samples: IntProperty(

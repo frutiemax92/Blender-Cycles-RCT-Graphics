@@ -22,6 +22,13 @@ class RCT_PT_main(bpy.types.Panel):
 
         layout.prop(props, "object_type")
         layout.prop(props, "output_directory")
+        layout.prop(props, "start_index")
+
+        box = layout.box()
+        if props.object_type == "SMALL":
+            box.prop(props, "small_anchor")
+
+        layout.operator("rct_graphics.render", icon="RENDER_STILL")
 
 
 class RCT_PT_render_settings(bpy.types.Panel):

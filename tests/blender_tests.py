@@ -347,6 +347,29 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(len(bpy.data.particles), 0)
         self.assertFalse([m for m in bpy.data.meshes if m.users == 0 and m.name.startswith(tree_generator.HAIR_NAME)])
 
+    def test_strand_shadows_and_hair_shading(self):
+        obj = self.add("HAIR_BROADLEAF")
+        hair = obj.rct_tree.hair_object
+        self.assertTrue(hair.visible_shadow)
+        self.edit(obj, hair_shadows=False)
+        self.assertFalse(hair.visible_shadow)
+        group = obj.rct_tree.material_leaves.node_tree.nodes[tree_generator.GROUP_NODE_NAME].node_tree
+        self.assertTrue([n for n in group.nodes if n.type == "HAIR_INFO"])
+
+    def test_old_role_groups_are_replaced(self):
+        name = "{} {}".format(tree_generator.TREE_NAME, tree.ROLES[tree.LEAVES])
+        old = tree_generator._build_role_group(name, tree.TRUNK)
+        material = bpy.data.materials.new("Old Leaves")
+        material.use_nodes = True
+        node = material.node_tree.nodes.new("ShaderNodeGroup")
+        node.node_tree = old
+        group = tree_generator.role_group(tree.LEAVES)
+        self.assertEqual(group.name, name)
+        self.assertIs(node.node_tree, group)
+        self.assertEqual(group["rct_version"], tree_generator.ROLE_GROUP_VERSION)
+        self.assertEqual(len([g for g in bpy.data.node_groups if g.name.startswith(name)]), 1)
+        self.assertIs(tree_generator.role_group(tree.LEAVES), group)
+
     def test_hair_broadleaf_look(self):
         obj = self.add("HAIR_BROADLEAF")
         self.assertTrue(tree_generator.look_differs(obj.rct_tree, self.props))

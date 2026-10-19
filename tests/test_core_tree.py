@@ -214,7 +214,7 @@ class HairTests(unittest.TestCase):
         return tree.build(tree.preset_params("HAIR_PALM", **values))
 
     def test_strands_stay_inside_the_footprint_and_height(self):
-        for source in ("BRANCHES", "TIPS", "CANOPY", "VOLUME"):
+        for source in ("BRANCHES", "TIPS", "CANOPY", "VOLUME", "CLUMPS"):
             for size in SIZES:
                 data, _ = self.hair(hair_source=source, hair_spread=120.0, hair_droop=-20.0, **size)
                 params, strands = data.params, data.strands
@@ -292,6 +292,24 @@ class HairTests(unittest.TestCase):
         # Roots fill the volume rather than a shell.
         depth = -data.envelope.sdf(roots)
         self.assertGreater((depth > 0.3 * data.envelope.radius).mean(), 0.1)
+
+    def test_clump_strands_grow_out_of_their_clumps(self):
+        data, mesh = self.hair(hair_source="CLUMPS", hair_spread=0.0, hair_droop=0.0, jitter=0.0)
+        blobs = data.blobs
+        self.assertGreater(len(blobs), 3)
+        self.assertNotIn(tree.LEAVES, set(mesh.material))
+        roots = data.strands.roots
+        # Each root lies inside some clump, and its strand points away from that clump's centre.
+        inside = np.zeros(len(roots), dtype=bool)
+        for blob in blobs:
+            local = (roots - blob[:3]) @ np.linalg.inv(tree.blob_transform(blob)).T
+            mine = np.linalg.norm(local, axis=1) <= 1.0 + 1e-9
+            outward = np.einsum("ij,ij->i", roots[mine] - blob[:3], data.strands.directions[mine])
+            self.assertTrue((outward > -1e-9).sum() > 0.5 * mine.sum())
+            inside |= mine
+        self.assertTrue(inside.all())
+        other, _ = self.hair(hair_source="VOLUME")
+        self.assertEqual(len(other.blobs), 0)
 
     def test_no_strands_without_count(self):
         data, _ = self.hair(hair_count=0)

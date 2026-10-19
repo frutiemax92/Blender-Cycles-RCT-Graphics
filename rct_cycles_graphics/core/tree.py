@@ -124,6 +124,7 @@ HAIR_SOURCES = _enum(
     ("TIPS", "Branch Tips", "Tufts at the end of each branch and stem"),
     ("CANOPY", "Canopy Surface", "Out of the canopy shape's surface"),
     ("VOLUME", "Canopy Volume", "From all through the canopy shape, pointing outwards (dense bushy crowns)"),
+    ("CLUMPS", "Clumps", "Fluffy tufts out of clumps placed as in the Blobs style (irregular bushy crowns)"),
 )
 BASE_STYLES = _enum(
     ("NONE", "None", "No base"),
@@ -297,6 +298,12 @@ GROUPS = (
             Param("hair_droop", 30.0, "Strand Droop", "Tilts the strands towards the ground (negative lifts them)", (0.0, 90.0), (-90.0, 90.0), "deg"),
             Param("hair_width", 0.06, "Strand Width", "Strand width at its root; one sprite pixel is about 0.09", (0.01, 0.3), (0.001, 2.0), "bu"),
             Param("hair_tip_width", 0.2, "Tip Width", "Strand width at its tip, relative to the root", (0.0, 1.0), (0.0, 1.0)),
+            Param(
+                "hair_shadows",
+                True,
+                "Strand Shadows",
+                "Strands shade each other and the trunk; off avoids near-black gaps inside dense crowns",
+            ),
             Param("hair_children", 0, "Children", "Extra strands rendered around each strand", (0, 20), (0, 1000)),
             Param("hair_child_radius", 0.08, "Child Spread", "How far the children grow from their strand", (0.0, 0.5), (0.0, 5.0), "bu"),
             Param("hair_clump", 0.0, "Clump", "Pulls the children's tips to their strand (negative spreads them)", (-1.0, 1.0), (-1.0, 1.0)),
@@ -676,39 +683,44 @@ PRESETS = {
         "Hair Broadleaf",
         {
             "height": 7.0,
-            "overhang": 1.45,
+            "overhang": 1.5,
             "trunk_length": 0.7,
             "trunk_base_radius": 0.3,
             "trunk_top_radius": 0.2,
             "root_flare": 0.6,
             "fork_count": 3,
-            "fork_height": 0.25,
+            "fork_height": 0.2,
             "fork_angle": 14.0,
             "branch_count": 0,
             "canopy_style": "HAIR",
             "canopy_shape": "ELLIPSOID",
-            "canopy_width": 1.0,
-            "canopy_height": 0.47,
-            "canopy_offset": 0.05,
-            "hair_source": "VOLUME",
-            "hair_count": 7000,
-            "hair_length": 1.05,
-            "hair_length_variation": 0.6,
-            "hair_spread": 80.0,
-            "hair_droop": 35.0,
-            "hair_width": 0.14,
-            "hair_tip_width": 0.3,
-            "hair_children": 2,
-            "hair_child_radius": 0.12,
+            "canopy_width": 1.2,
+            "canopy_height": 0.48,
+            "canopy_offset": 0.08,
+            "hair_source": "CLUMPS",
+            "clump_size": 1.1,
+            "clump_size_variation": 0.4,
+            "clump_flatten": 0.25,
+            "clump_count": 14,
+            # Few, wide strands: each one reads as a stroke, as in the originals.
+            "hair_count": 2600,
+            "hair_length": 0.8,
+            "hair_length_variation": 0.4,
+            "hair_spread": 70.0,
+            "hair_droop": 20.0,
+            "hair_width": 0.2,
+            "hair_tip_width": 0.5,
         },
-        # Deep shadow between the strands would quantize to dark reds and browns.
+        # Deep shadow between the strands would quantize to dark reds and
+        # browns; stronger ambient light lifts the crown's shadowed side.
         look={
+            "ambient_strength": 1.5,
             "palette_mode": "CUSTOM",
             "palette_ramps": tuple(name in ("grey", "light_brown", "sea_green") for name, _ in RAMP_TITLES),
         },
         colours={
             "trunk": (srgb(150, 95, 40), srgb(200, 140, 70)),
-            "leaves": (srgb(30, 85, 50), srgb(125, 185, 140)),
+            "leaves": (srgb(35, 95, 55), srgb(150, 205, 160)),
         },
     ),
     "BARE": _preset(
@@ -1432,6 +1444,9 @@ def _strand_blobs(params, skeleton, tips, rng):
 
 def place_blobs(params, skeleton, tips, envelope, rng):
     style = params.canopy_style
+    if style == "HAIR" and params.hair_source == "CLUMPS":
+        # The clumps only place the hair; they get no surface.
+        style = "BLOBS"
     if style in ("NONE", "TOPIARY", "NEEDLES", "HAIR"):
         return np.zeros((0, BLOB_FIELDS))
     if style == "LAYERS":
@@ -2122,6 +2137,28 @@ def _hair_in_volume(data, rng):
     return result
 
 
+def _hair_in_clumps(data, rng):
+    """Strands from inside each clump, pointing away from its centre: a fluffy tuft per clump."""
+    params = data.params
+    blobs = data.blobs
+    if len(blobs) == 0:
+        return []
+    volumes = blobs[:, 3] ** 3 * blobs[:, 4] * blobs[:, 5]
+    angle = math.radians(params.hair_spread)
+    result = []
+    for blob, count in zip(blobs, _split(params.hair_count, volumes)):
+        transform = blob_transform(blob)
+        for _ in range(int(count)):
+            while True:
+                u = np.array([rng.uniform(-1.0, 1.0) for _ in range(3)])
+                if u @ u <= 1.0:
+                    break
+            out = transform @ u
+            axis = _normalize(out) if np.linalg.norm(out) > 1e-6 else np.array([0.0, 0.0, 1.0])
+            result.append((blob[:3] + out, _cone_direction(axis, angle, rng), 1.0))
+    return result
+
+
 def hair_strands(data):
     """Hair canopy strands (``Strands``), from the branches, the tips, the canopy surface or its volume.
 
@@ -2139,6 +2176,7 @@ def hair_strands(data):
         "TIPS": _hair_at_tips,
         "CANOPY": _hair_on_canopy,
         "VOLUME": _hair_in_volume,
+        "CLUMPS": _hair_in_clumps,
     }[params.hair_source]
     droop = math.radians(params.hair_droop)
     bounds = SimpleNamespace(cx=data.anchor[0], cy=data.anchor[1], radius=params.overhang * data.half_width)

@@ -146,8 +146,14 @@ applies the preset's outline setting.
 **Hair leaves.** The *Hair* style renders the leaves as Blender particle
 hair, for fine, bushy fronds such as the RCT2 palms. The strands grow from
 the branches (like fronds, *Flatten* keeps them beside the branch), from
-the branch tips (tufts), from the canopy surface, or from all through the
-canopy volume (dense bushy crowns such as Hair Broadleaf). Each strand is straight,
+the branch tips (tufts), from the canopy surface, from all through the
+canopy volume, or out of clumps placed as in the Blobs style (lumpy, bushy
+crowns such as Hair Broadleaf). On strands, the leaves material shades
+each strand from Colour A at the root to Colour B at the tip, with no
+speckle, so it reads as one stroke; a few wide strands (about two sprite
+pixels) look cleaner than many thin ones. *Strand Shadows* lets strands
+shade each other and the trunk; raise the scene's *Ambient* light (Hair
+Broadleaf's suggested look uses 1.5) to lift the shadowed side. Each strand is straight,
 tilted down by *Strand Droop* and kept inside the overhang and the tree
 height. *Children* adds rendered strands around each one, with *Child
 Spread*, *Clump* and *Roughness*. The hair lives on a child object,

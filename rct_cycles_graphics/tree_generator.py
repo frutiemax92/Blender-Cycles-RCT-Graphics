@@ -206,17 +206,31 @@ def _mix_colours(group, location):
     return node
 
 
-def _colour_socket(sockets, name):
+def _colour_socket(sockets, name, kind="RGBA"):
     # A Mix node has float, vector and colour sockets of the same name.
-    return next(s for s in sockets if s.name == name and s.type == "RGBA")
+    return next(s for s in sockets if s.name == name and s.type == kind)
+
+
+#: Bumped when the role groups change; older groups in a file are replaced.
+ROLE_GROUP_VERSION = 2
 
 
 def role_group(role):
     """Shared node group of a role, exposing Colour A/B, Speckle Scale and Bump Strength."""
     name = "{} {}".format(TREE_NAME, tree.ROLES[role])
-    group = bpy.data.node_groups.get(name)
-    if group is not None:
-        return group
+    old = bpy.data.node_groups.get(name)
+    if old is not None and (old.library is not None or old.get("rct_version", 1) >= ROLE_GROUP_VERSION):
+        return old
+    group = _build_role_group(name, role)
+    if old is not None:
+        old.user_remap(group)
+        bpy.data.node_groups.remove(old)
+        group.name = name
+    group["rct_version"] = ROLE_GROUP_VERSION
+    return group
+
+
+def _build_role_group(name, role):
     group = bpy.data.node_groups.new(name, "ShaderNodeTree")
     interface = group.interface
     interface.new_socket("Colour A", in_out="INPUT", socket_type="NodeSocketColor")
@@ -265,9 +279,32 @@ def role_group(role):
         _link(group, voronoi, "Distance", combined, 2)
         factor = _map_range(group, (-80, 150), 0.35, 1.15)
         _link(group, combined, 0, factor, "Value")
-        _link(group, factor, "Result", mix, "Factor")
         _link(group, voronoi, "Distance", bump, "Height")
         group.links.new(mix_result, outputs.inputs["Color"])
+        # Hair strands: Colour A at the root to Colour B at the tip, each
+        # strand a little lighter or darker, and no speckle or bump, so
+        # every strand reads as one stroke.
+        hair = nodes.new("ShaderNodeHairInfo")
+        hair.location = (-650, 550)
+        brightness = _math(group, "MULTIPLY_ADD", (-450, 550), b=0.8)
+        brightness.inputs[2].default_value = 0.4
+        _link(group, hair, "Random", brightness, 0)
+        strand = _math(group, "MULTIPLY", (-250, 500), clamp=True)
+        _link(group, hair, "Intercept", strand, 0)
+        _link(group, brightness, 0, strand, 1)
+        pick = nodes.new("ShaderNodeMix")
+        pick.data_type = "FLOAT"
+        pick.location = (-80, 400)
+        _link(group, hair, "Is Strand", pick, "Factor")
+        group.links.new(factor.outputs["Result"], _colour_socket(pick.inputs, "A", "VALUE"))
+        group.links.new(strand.outputs[0], _colour_socket(pick.inputs, "B", "VALUE"))
+        group.links.new(_colour_socket(pick.outputs, "Result", "VALUE"), mix.inputs["Factor"])
+        surface = _math(group, "SUBTRACT", (-80, -300), a=1.0)
+        _link(group, hair, "Is Strand", surface, 1)
+        strength = _math(group, "MULTIPLY", (80, -300))
+        _link(group, inputs, "Bump Strength", strength, 0)
+        _link(group, surface, 0, strength, 1)
+        _link(group, strength, 0, bump, "Strength")
     elif role == tree.TRUNK:
         # Colour B at the base fading to Colour A, with bark streaks along Z.
         separate = nodes.new("ShaderNodeSeparateXYZ")
@@ -575,6 +612,7 @@ def sync_hair(obj, params, strands):
     if modifier is None:
         modifier = hair.modifiers.new("Hair", "PARTICLE_SYSTEM")
     _configure_hair(modifier.particle_system, params, strands)
+    hair.visible_shadow = params.hair_shadows
 
 
 def _footprint_box(settings):
@@ -709,6 +747,8 @@ def _make_property(param):
     common = dict(name=param.label, description=param.description, update=update)
     if param.kind == "enum":
         return EnumProperty(items=param.items, default=param.default, **common)
+    if param.kind == "bool":
+        return BoolProperty(default=param.default, **common)
     hard, soft = param.hard, param.soft
     if param.kind == "int":
         return IntProperty(default=param.default, min=hard[0], max=hard[1], soft_min=soft[0], soft_max=soft[1], **common)

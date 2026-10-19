@@ -173,6 +173,8 @@ def _tree_param_active(settings, name):
     needles = style == "NEEDLES"
     hair = style == "HAIR"
     hair_children = hair and settings.hair_children > 0
+    # Hair from clumps places them as the Blobs style does.
+    clumps = blobs or (hair and settings.hair_source == "CLUMPS")
     noisy = style not in ("NEEDLES", "HAIR", "NONE")
     conditions = {
         "large_width": settings.size == "LARGE",
@@ -183,14 +185,14 @@ def _tree_param_active(settings, name):
         "whorl_size": settings.branch_spread == "WHORLED",
         "sub_branch_length": settings.sub_branches > 0,
         "canopy_shape": style != "NONE",
-        "clump_size": blobs,
-        "clump_size_variation": blobs,
-        "clump_count": style in ("BLOBS", "LAYERS", "STRANDS"),
-        "clumps_per_tip": style in ("BLOBS", "LAYERS", "COLUMN", "STRANDS"),
-        "clump_flatten": blobs,
+        "clump_size": clumps,
+        "clump_size_variation": clumps,
+        "clump_count": style in ("BLOBS", "LAYERS", "STRANDS") or (clumps and hair),
+        "clumps_per_tip": style in ("BLOBS", "LAYERS", "COLUMN", "STRANDS") or (clumps and hair),
+        "clump_flatten": clumps,
         "blob_merge": blobs,
-        "droop": blobs,
-        "hollow": (blobs and style != "COLUMN") or needles or (hair and settings.hair_source == "BRANCHES"),
+        "droop": clumps,
+        "hollow": (clumps and style != "COLUMN") or needles or (hair and settings.hair_source == "BRANCHES"),
         "needle_length": needles,
         "needle_width": needles,
         "needle_spacing": needles,
@@ -206,6 +208,7 @@ def _tree_param_active(settings, name):
         "hair_droop": hair,
         "hair_width": hair,
         "hair_tip_width": hair,
+        "hair_shadows": hair,
         "hair_children": hair,
         "hair_child_radius": hair_children,
         "hair_clump": hair_children,

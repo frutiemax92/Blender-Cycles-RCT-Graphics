@@ -233,21 +233,32 @@ trial and error. Tick **Match RCT2 Tones** under *Render & Colour* instead
 (*Use Suggested Look* turns it on for generated trees).
 
 - Every pixel moves along its own colour ramp until the object's shades are
-  spread like those of the 33 vanilla RCT2 trees (snow-covered ones aside).
-  Hues stay yours: an autumn tree stays orange, only its shading changes.
+  spread like those of the reference trees. Hues stay yours: an autumn tree
+  stays orange, only its shading changes.
+- **Reference** picks those trees among the 33 vanilla RCT2 trees
+  (snow-covered ones aside). They differ a lot: a Norway Spruce averages
+  shade 1.8 of 11, a White Poplar 5.3. *Closest RCT2 Trees* (the default)
+  uses the trees about as bright as your render, so a light broadleaf stays
+  light and only gets their contrast; a render darker or lighter than every
+  RCT2 tree is brought back into their range. *Average RCT2 Tree* matches
+  every render to the average of all of them, whatever its brightness, and
+  you can also pick one tree to shade like. Fed back through the matching,
+  every vanilla tree keeps its average shade within 0.35 with the default.
 - One curve is fitted over all views and frames, so every rotation gets the
   same correction. The curve is smooth, so the render's own shading is kept.
 - Rim pixels are left out of the fit; *Outline Darkening* still adds the
   contour on top.
 - **Strength** blends between the plain render (0) and the full match (1).
   **Match Saturation** also nudges plain colours' saturation towards the
-  originals, by at most -15% / +25%.
+  reference trees, by at most -15% / +25%.
 - After every render, the section shows the shades the sprites use next to
-  the RCT2 trees' (average shade, dark / mid / light shares), with or without
-  matching.
+  the reference trees' (average shade, dark / mid / light shares), with or
+  without matching.
+- `tools/measure_rct2_tones.py <RCT2 folder>` measures the vanilla trees again
+  and prints the table kept in `core/tone.py`.
 
-Light and materials then shape the object; you no longer need them to set
-its exposure. Matching cannot invent shadow detail, though: if the ambient
+Light and materials then shape the object; with *Average RCT2 Tree* or a
+chosen tree you no longer need them to set its exposure. Matching cannot invent shadow detail, though: if the ambient
 light fills every crevice, the darks come out as flat patches.
 
 ## Alignment: no more editing offsets by hand

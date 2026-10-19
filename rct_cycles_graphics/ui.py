@@ -63,6 +63,7 @@ def draw_render_settings(layout, props):
     col.prop(props, "tone_match")
     sub = col.column()
     sub.active = props.tone_match
+    sub.prop(props, "tone_reference")
     sub.prop(props, "tone_strength")
     sub.prop(props, "tone_saturation")
     if props.tone_report:

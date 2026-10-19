@@ -389,7 +389,7 @@ DEFAULT_COLOURS = {
 
 
 def _preset(label, params, look=None, colours=None, based_on=None):
-    entry = {"label": label, "params": dict(params), "look": {"outline_shades": 2, "palette_mode": "FULL", "tone_match": True}, "colours": {}}
+    entry = {"label": label, "params": dict(params), "look": {"outline_shades": 2, "palette_mode": "FULL", "tone_match": True, "tone_reference": "AUTO"}, "colours": {}}
     if based_on is not None:
         entry["params"] = dict(based_on["params"], **params)
         entry["look"] = dict(based_on["look"])

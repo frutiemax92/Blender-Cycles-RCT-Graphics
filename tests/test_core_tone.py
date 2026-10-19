@@ -42,6 +42,21 @@ class ReferenceTests(unittest.TestCase):
         # Half of the original trees' pixels use the darkest four shades.
         self.assertLess(quantiles[3], 3.5)
 
+    def test_average_is_the_mean_of_the_trees(self):
+        shares = np.mean([tone.reference(code).shades for code in tone.TREE_NAMES], axis=0)
+        np.testing.assert_allclose(tone.reference("AVERAGE").shades, shares)
+        self.assertNotIn("TNSS", tone.TREE_NAMES)
+
+    def test_vanilla_trees_differ_in_brightness(self):
+        means = [tone.reference(code).shades @ np.arange(12) for code in tone.TREE_NAMES]
+        self.assertGreater(max(means) - min(means), 3)
+
+    def test_closest_trees_follow_the_render(self):
+        dark = tone.reference("AUTO", 2.0).shades @ np.arange(12)
+        light = tone.reference("AUTO", 5.0).shades @ np.arange(12)
+        self.assertLess(dark, 2.6)
+        self.assertGreater(light, 4.4)
+
     def test_shade_of_finds_the_ramp_position(self):
         ramps = np.full(len(GREEN), tone._RAMP_OF[GREEN[0]])
         shade = tone.shade_of(palette.PALETTE[GREEN].astype(np.float32), ramps)
@@ -52,11 +67,32 @@ class FitTests(unittest.TestCase):
     def test_a_washed_out_render_moves_to_the_reference_shades(self):
         rgb, classes, allowed = sample(ramp_image(GREEN, (4, 8)))
         before, _ = mean_shade(rgb, classes, allowed)
-        curve = tone.fit([(rgb, classes, allowed)], match_saturation=False)
+        curve = tone.fit([(rgb, classes, allowed)], match_saturation=False, reference_key="AVERAGE")
         after, _ = mean_shade(curve.apply(rgb, classes, allowed), classes, allowed)
         reference = (tone.REFERENCE_SHADES * np.arange(12)).sum()
         self.assertGreater(before, 5.5)
         self.assertAlmostEqual(after, reference, delta=0.5)
+
+    def test_closest_trees_keep_a_brightness_rct2_trees_have(self):
+        # A light render is only reshaped: some RCT2 trees are that light.
+        rgb, classes, allowed = sample(ramp_image(GREEN, (3, 6)))
+        before, _ = mean_shade(rgb, classes, allowed)
+        curve = tone.fit([(rgb, classes, allowed)], match_saturation=False)
+        after, _ = mean_shade(curve.apply(rgb, classes, allowed), classes, allowed)
+        self.assertAlmostEqual(after, before, delta=0.4)
+
+    def test_closest_trees_bring_a_washed_out_render_into_range(self):
+        rgb, classes, allowed = sample(ramp_image(GREEN, (6, 10)))
+        curve = tone.fit([(rgb, classes, allowed)], match_saturation=False)
+        after, _ = mean_shade(curve.apply(rgb, classes, allowed), classes, allowed)
+        lightest = max(tone.reference(code).shades @ np.arange(12) for code in tone.TREE_NAMES)
+        self.assertAlmostEqual(after, lightest, delta=0.5)
+
+    def test_a_chosen_tree_is_matched(self):
+        rgb, classes, allowed = sample(ramp_image(GREEN, (3, 6)))
+        curve = tone.fit([(rgb, classes, allowed)], match_saturation=False, reference_key="TNS")
+        after, _ = mean_shade(curve.apply(rgb, classes, allowed), classes, allowed)
+        self.assertAlmostEqual(after, tone.reference("TNS").shades @ np.arange(12), delta=0.5)
 
     def test_contrast_is_stretched(self):
         rgb, classes, allowed = sample(ramp_image(GREEN, (2.5, 4.5)))
@@ -117,7 +153,7 @@ class PipelineTests(unittest.TestCase):
         linear = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
         rgba = np.concatenate([linear, np.ones(linear.shape[:2] + (1,))], axis=-1).astype(np.float32)
         settings = postprocess.Settings(dither_method="NONE")
-        curve = tone.fit([postprocess.prepare(rgba, settings)])
+        curve = tone.fit([postprocess.prepare(rgba, settings)], reference_key="AVERAGE")
         plain = postprocess.to_indices(rgba, settings)
         matched = postprocess.to_indices(rgba, settings, tone=curve)
         self.assertLess(tone._POSITION_OF[matched].mean(), tone._POSITION_OF[plain].mean() - 1)
@@ -126,8 +162,8 @@ class PipelineTests(unittest.TestCase):
 class ReportTests(unittest.TestCase):
     def test_report_compares_with_the_reference(self):
         indices = np.array([[0, GREEN[0], GREEN[11]]], dtype=np.uint8)
-        lines = tone.report([indices])
-        self.assertIn("Average shade 5.5 of 11", lines[0])
+        lines = tone.report([indices], "AVERAGE")
+        self.assertIn("Average shade 5.5 of 11 (RCT2 trees", lines[0])
         self.assertIn("50 / 0 / 50%", lines[1])
 
     def test_report_is_empty_without_pixels(self):

@@ -12,6 +12,7 @@ from bpy.props import (
 from .core.objectjson import OBJECT_FLAGS
 from .core.palette import RAMP_TITLES
 from .core.rct2dat import VANILLA_TREES
+from .core.tone import RCT2_TREES
 
 _COMPARE_TREE_ITEMS = [("NONE", "None", "No tree")] + [
     (name, title, "RCT2's {} ({}.DAT)".format(title, name)) for name, title in VANILLA_TREES
@@ -362,10 +363,26 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         name="Match RCT2 Tones",
         description=(
             "Move every pixel along its own colour ramp so the shading has the "
-            "brightness and contrast of the original RCT2 trees, whatever the "
-            "lighting. Hues are kept; all views get the same correction"
+            "brightness and contrast of the original RCT2 trees. Hues are kept; "
+            "all views get the same correction"
         ),
         default=False,
+    )
+
+    tone_reference: EnumProperty(
+        name="Reference",
+        description="RCT2 trees whose shading the render is matched to",
+        items=[
+            (
+                "AUTO",
+                "Closest RCT2 Trees",
+                "The RCT2 trees about as bright as the render: a light tree stays light, "
+                "and only a render darker or lighter than every RCT2 tree is brought into their range",
+            ),
+            ("AVERAGE", "Average RCT2 Tree", "All RCT2 trees alike, whatever the render's brightness"),
+        ]
+        + [(code, name, "Shade like the RCT2 {} ({})".format(name, code)) for code, name, _, _, _ in RCT2_TREES],
+        default="AUTO",
     )
 
     tone_strength: FloatProperty(
@@ -379,13 +396,13 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
 
     tone_saturation: BoolProperty(
         name="Match Saturation",
-        description="Also nudge the saturation of plain colours towards the RCT2 trees",
+        description="Also nudge the saturation of plain colours towards the reference trees",
         default=True,
     )
 
     tone_report: StringProperty(
         name="Tone Report",
-        description="Shades used by the last render, compared with the RCT2 trees",
+        description="Shades used by the last render, compared with the reference trees",
         default="",
     )
 

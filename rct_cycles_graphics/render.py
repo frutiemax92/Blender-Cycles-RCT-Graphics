@@ -369,7 +369,7 @@ def _fit_tone(results, settings):
         for result, _ in results
         if result is not None
     ]
-    return tone.fit(samples, settings.tone_strength, settings.tone_saturation)
+    return tone.fit(samples, settings.tone_strength, settings.tone_saturation, settings.tone_reference)
 
 
 def _sort_key(render_key):

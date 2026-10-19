@@ -150,6 +150,7 @@ class Settings:
         outline_width=1,
         outline_diagonal=False,
         tone_match=False,
+        tone_reference="AUTO",
         tone_strength=1.0,
         tone_saturation=True,
     ):
@@ -163,6 +164,7 @@ class Settings:
         self.outline_width = outline_width
         self.outline_diagonal = outline_diagonal
         self.tone_match = tone_match
+        self.tone_reference = tone_reference
         self.tone_strength = tone_strength
         self.tone_saturation = tone_saturation
 

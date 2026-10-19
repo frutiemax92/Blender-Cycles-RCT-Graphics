@@ -355,19 +355,38 @@ class LeafInstanceTests(unittest.TestCase):
         self.assertFalse(np.array_equal(mesh_a.verts, mesh_c.verts))
 
     def test_built_in_shapes_face_up_and_reach_one(self):
-        for shape in ("BLADE", "OVAL", "SPRIG"):
+        for shape in ("BLADE", "OVAL", "SPRIG", "ROSETTE"):
             verts, faces = tree.leaf_template(shape, 0.3)
-            self.assertTrue((tree.face_normals(verts, faces)[:, 2] > 0.99).all(), shape)
-            self.assertAlmostEqual(verts[:, 0].max(), 1.0, msg=shape)
-            self.assertAlmostEqual(verts[:, 0].min(), 0.0, msg=shape)
+            self.assertAlmostEqual(np.linalg.norm(verts, axis=1).max(), 1.0, msg=shape)
+            # A custom copy of a built-in shape keeps its size.
+            np.testing.assert_allclose(tree.leaf_template("CUSTOM", 0.3, (verts * 4.0, faces))[0], verts)
+            if shape != "ROSETTE":
+                self.assertTrue((tree.face_normals(verts, faces)[:, 2] > 0.99).all(), shape)
+                self.assertAlmostEqual(verts[:, 0].max(), 1.0, msg=shape)
+                self.assertAlmostEqual(verts[:, 0].min(), 0.0, msg=shape)
         narrow, _ = tree.leaf_template("BLADE", 0.1)
         wide, _ = tree.leaf_template("BLADE", 0.5)
         self.assertAlmostEqual(np.ptp(wide[:, 1]) / np.ptp(narrow[:, 1]), 5.0)
 
+    def test_rosette(self):
+        verts, faces = tree.leaf_template("ROSETTE", 0.15)
+        spikes = sum(count for count, _, _ in tree.ROSETTE_RINGS)
+        self.assertEqual(len(faces), 2 * spikes)
+        # Every spike opens forwards from the end of the stem, all around it.
+        self.assertTrue((tree.face_normals(verts, faces)[:, 0] > 0.5).all())
+        tips = verts[2::4]
+        angles = np.sort(np.arctan2(tips[:, 2], tips[:, 1]))
+        self.assertLess(np.diff(np.concatenate([angles, angles[:1] + 2 * math.pi])).max(), math.radians(60.0))
+        along = tree.leaf_along(verts)
+        self.assertLess(along[0::4].max(), 0.2)
+        self.assertAlmostEqual(along.max(), 1.0)
+        data, mesh = tree.build(tree.preset_params("ROSETTE_BROADLEAF"))
+        self.assertEqual(mesh.material.count(tree.LEAVES), len(data.strands) * len(faces))
+
     def test_custom_template_is_scaled_and_falls_back_to_the_blade(self):
         square = ([(0.0, -1.0, 0.0), (4.0, -1.0, 0.0), (4.0, 1.0, 0.0), (0.0, 1.0, 0.0)], [(0, 1, 2, 3)])
         verts, faces = tree.leaf_template("CUSTOM", 0.3, square)
-        self.assertAlmostEqual(verts[:, 0].max(), 1.0)
+        self.assertAlmostEqual(np.linalg.norm(verts, axis=1).max(), 1.0)
         self.assertEqual(faces, [(0, 1, 2, 3)])
         blade = tree.leaf_template("BLADE", 0.3)
         np.testing.assert_array_equal(tree.leaf_template("CUSTOM", 0.3)[0], blade[0])

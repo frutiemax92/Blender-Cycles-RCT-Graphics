@@ -299,6 +299,8 @@ class RCT_PT_tree(bpy.types.Panel):
                     col.prop(settings, param.name)
                 if param.name == "leaf_shape" and settings.leaf_shape == "CUSTOM":
                     col.prop(settings, "leaf_object")
+                elif param.name == "leaf_shape" and settings.canopy_style == "INSTANCES":
+                    col.operator("rct_graphics.tree_make_leaf_object", icon="MESH_DATA")
 
         header, body = layout.panel("rct_tree_materials", default_closed=False)
         header.label(text="Materials")

@@ -388,6 +388,23 @@ class TreeTests(unittest.TestCase):
         tree_generator.regenerate(obj)
         self.assertIn("hide it from renders", settings.warnings)
 
+    def test_make_leaf_object(self):
+        obj = self.add("ROSETTE_BROADLEAF")
+        settings = obj.rct_tree
+        before = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", before)
+        self.assertEqual(bpy.ops.rct_graphics.tree_make_leaf_object(), {"FINISHED"})
+        leaf = settings.leaf_object
+        self.assertEqual(settings.leaf_shape, "CUSTOM")
+        self.assertTrue(leaf.hide_render)
+        self.assertEqual(len(leaf.data.polygons), len(tree.leaf_template("ROSETTE", settings.leaf_width)[1]))
+        self.assertFalse([w for w in settings.warnings.split("\n") if "Leaf Object" in w])
+        # The editable copy gives the same tree as the built-in shape.
+        after = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", after)
+        np.testing.assert_allclose(after, before, atol=1e-5)
+        self.assertFalse(bpy.ops.rct_graphics.tree_make_leaf_object.poll())
+
     def test_old_role_groups_are_replaced(self):
         name = "{} {}".format(tree_generator.TREE_NAME, tree.ROLES[tree.LEAVES])
         old = tree_generator._build_role_group(name, tree.TRUNK)

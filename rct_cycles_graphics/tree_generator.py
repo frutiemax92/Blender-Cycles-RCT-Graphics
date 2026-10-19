@@ -16,6 +16,7 @@ from itertools import chain
 import bpy
 import numpy as np
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from mathutils import Vector
 
 from . import materials, scene_setup
 from .core import projection, tree
@@ -1004,6 +1005,39 @@ class RCT_OT_tree_apply(_TreeOperator, bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RCT_OT_tree_make_leaf_object(_TreeOperator, bpy.types.Operator):
+    """Copy the active tree's built-in leaf shape into a mesh object to edit, and use it as the Leaf Object"""
+
+    bl_idname = "rct_graphics.tree_make_leaf_object"
+    bl_label = "Make Leaf Object"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = active_tree(context)
+        return obj is not None and obj.rct_tree.canopy_style == "INSTANCES" and obj.rct_tree.leaf_shape != "CUSTOM"
+
+    def execute(self, context):
+        obj = active_tree(context)
+        settings = obj.rct_tree
+        verts, faces = tree.leaf_template(settings.leaf_shape, settings.leaf_width)
+        label = next(label for key, label, _ in tree.LEAF_SHAPES if key == settings.leaf_shape)
+        name = "RCT Leaf ({})".format(label)
+        leaf = bpy.data.objects.new(name, write_mesh(name, tree.MeshData(verts, faces, 0, False)))
+        leaf.data.materials.append(role_material(settings, tree.LEAVES))
+        # Beside the tree, out of the renders; only its mesh matters.
+        leaf.location = obj.matrix_world.translation + obj.matrix_world.to_3x3() @ Vector((projection.TILE_SIZE, 0.0, 1.0))
+        leaf.hide_render = True
+        for collection in obj.users_collection or (context.scene.collection,):
+            collection.objects.link(leaf)
+        with suspended_updates():
+            settings.leaf_object = leaf
+            settings.leaf_shape = "CUSTOM"
+        regenerate(obj)
+        self.report({"INFO"}, "Leaf shape copied to {}; edit it, then Regenerate".format(leaf.name))
+        return {"FINISHED"}
+
+
 class RCT_OT_tree_match_scene(_TreeOperator, bpy.types.Operator):
     """Set the scene's object type and footprint from the active tree"""
 
@@ -1038,6 +1072,7 @@ classes = (
     RCT_OT_tree_load_preset,
     RCT_OT_tree_make_unique,
     RCT_OT_tree_apply,
+    RCT_OT_tree_make_leaf_object,
     RCT_OT_tree_match_scene,
     RCT_OT_tree_use_look,
 )

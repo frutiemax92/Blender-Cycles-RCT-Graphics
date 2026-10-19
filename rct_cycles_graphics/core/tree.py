@@ -135,6 +135,7 @@ LEAF_SHAPES = _enum(
     ("BLADE", "Blade", "A narrow, pointed leaf folded along its midrib"),
     ("OVAL", "Oval", "A broad, rounded leaf"),
     ("SPRIG", "Sprig", "Three blades fanned from one stem"),
+    ("ROSETTE", "Rosette", "Two rings of thin spikes radiating from a short stem, like a green flower head"),
     ("CUSTOM", "Custom Object", "The mesh of the Leaf Object: its root at the origin, growing along +X, upper face towards +Z"),
 )
 BASE_STYLES = _enum(
@@ -763,6 +764,25 @@ PRESETS = {
             "hair_spread": 40.0,
             "leaf_shape": "BLADE",
             "leaf_width": 0.2,
+        },
+        based_on=_HAIR_BROADLEAF,
+    ),
+    "ROSETTE_BROADLEAF": _preset(
+        "Rosette Broadleaf",
+        {
+            "height": 7.8,
+            "canopy_style": "INSTANCES",
+            "canopy_height": 0.55,
+            # Fewer, larger leaves: each rosette is a starburst of
+            # one-pixel spikes around a darker centre.
+            "hair_count": 500,
+            "hair_length": 1.0,
+            "hair_spread": 20.0,
+            "leaf_shape": "ROSETTE",
+            "leaf_width": 0.15,
+            "leaf_fold": 0.0,
+            "leaf_bend": 15.0,
+            "leaf_irregularity": 0.3,
         },
         based_on=_HAIR_BROADLEAF,
     ),
@@ -2330,19 +2350,50 @@ def _merge(parts):
     return np.array(verts, dtype=np.float64).reshape(-1, 3), faces
 
 
-def leaf_template(shape, width, custom=None):
-    """Leaf mesh of ``shape``, rooted at the origin along +X and about 1 long: (verts, faces).
+#: Rosette rings: (spikes, angle forwards from the stem's cross plane in degrees, spike length).
+ROSETTE_RINGS = ((9, 15.0, 1.0), (7, 50.0, 0.7))
+#: Length of the rosette's stem, before the rosette is scaled to reach 1.
+ROSETTE_STEM = 0.12
 
-    ``custom`` is the (verts, faces) of the custom shape, scaled so that it
-    reaches x = 1; without one, the custom shape falls back to the blade.
+
+def _rosette(width):
+    """Thin diamond spikes radiating from the end of a short stem, opening along +X: (verts, faces).
+
+    Spike lengths and angles vary slightly (but always the same way) so the
+    star is not perfectly regular; every face points forwards (+X).
+    """
+    centre = np.array([ROSETTE_STEM, 0.0, 0.0])
+    verts, faces = [], []
+    for ring, (count, cup, length) in enumerate(ROSETTE_RINGS):
+        cup = math.radians(cup)
+        for k in range(count):
+            azimuth = 2.0 * math.pi * (k + 0.5 * ring) / count + 0.25 * math.sin(2.4 * k + ring)
+            reach = length * (0.85 + 0.15 * math.cos(1.7 * k + ring))
+            direction = np.array([math.sin(cup), math.cos(cup) * math.cos(azimuth), math.cos(cup) * math.sin(azimuth)])
+            # Around the stem, so direction x tangent points forwards.
+            tangent = np.array([0.0, -math.sin(azimuth), math.cos(azimuth)])
+            side = tangent * width * reach / 2.0
+            base = len(verts)
+            verts += [centre, centre + direction * 0.35 * reach - side, centre + direction * reach, centre + direction * 0.35 * reach + side]
+            faces += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
+    verts = np.array(verts)
+    return verts / np.linalg.norm(verts, axis=1).max(), faces
+
+
+def leaf_template(shape, width, custom=None):
+    """Leaf mesh of ``shape``, rooted at the origin along +X: (verts, faces).
+
+    The farthest vertex from the root is 1 away. ``custom`` is the
+    (verts, faces) of the custom shape, scaled the same way; without one,
+    the custom shape falls back to the blade.
     """
     if shape == "CUSTOM" and custom is not None and len(custom[1]):
         verts = np.asarray(custom[0], dtype=np.float64).reshape(-1, 3)
-        reach = float(verts[:, 0].max())
-        if reach <= 1e-6:
-            reach = float(np.ptp(verts, axis=0).max())
+        reach = float(np.linalg.norm(verts, axis=1).max())
         return verts / max(reach, 1e-6), [tuple(int(i) for i in f) for f in custom[1]]
     half = width / 2.0
+    if shape == "ROSETTE":
+        return _rosette(width)
     if shape == "OVAL":
         return _blade(half, lambda t: math.sin(math.pi * t) ** 0.6)
     pointed = lambda t: math.sin(math.pi * t**0.75) ** 1.2  # noqa: E731
@@ -2358,6 +2409,12 @@ def leaf_template(shape, width, custom=None):
     return _blade(half, pointed)
 
 
+def leaf_along(template):
+    """Each template vertex's distance from the root, over the farthest one's: 0 at the root, 1 at the tips."""
+    distance = np.linalg.norm(np.asarray(template, dtype=np.float64), axis=1)
+    return distance / max(float(distance.max()), 1e-9)
+
+
 def deform_leaves(template, count, params, rng):
     """``count`` deformed copies of a leaf template in its own frame: (count, V, 3).
 
@@ -2367,7 +2424,7 @@ def deform_leaves(template, count, params, rng):
     (more towards the tip, so the root stays on its branch).
     """
     verts = np.asarray(template, dtype=np.float64)
-    along = np.clip(verts[:, 0], 0.0, 1.0)
+    along = leaf_along(verts)
     irregular = params.leaf_irregularity
     shape = (count, 1)
     width = 1.0 + irregular * rng.uniform(-0.35, 0.35, shape)
@@ -2423,7 +2480,7 @@ def leaf_instances(data, custom=None):
     size = len(template)
     all_faces = [tuple(int(i) + n * size for i in f) for n in range(count) for f in faces]
     shade = np.ones((count, size, 3))
-    shade[:, :, 0] = np.clip(template[:, 0], 0.0, 1.0)
+    shade[:, :, 0] = leaf_along(template)
     shade[:, :, 1] = rng.random((count, 1))
     return verts.reshape(-1, 3), all_faces, shade.reshape(-1, 3)
 

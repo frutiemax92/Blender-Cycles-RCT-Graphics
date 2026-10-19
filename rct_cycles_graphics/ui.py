@@ -211,7 +211,7 @@ def _tree_param_active(settings, name):
         "hair_droop": placed,
         "hair_width": hair,
         "hair_tip_width": hair,
-        "hair_shadows": hair,
+        "hair_shadows": placed,
         "hair_children": hair,
         "hair_child_radius": hair_children,
         "hair_clump": hair_children,
@@ -239,6 +239,7 @@ def _tree_param_active(settings, name):
 #: Labels of the shared strand settings when they place leaf instances.
 _LEAF_LABELS = {
     "hair_count": "Leaves",
+    "hair_shadows": "Leaf Shadows",
     "hair_length": "Leaf Size",
     "hair_length_variation": "Size Variation",
     "hair_spread": "Leaf Angle",

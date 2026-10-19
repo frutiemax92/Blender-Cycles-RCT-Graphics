@@ -388,6 +388,20 @@ class TreeTests(unittest.TestCase):
         tree_generator.regenerate(obj)
         self.assertIn("hide it from renders", settings.warnings)
 
+    def test_leaf_shadows(self):
+        obj = self.add("ROSETTE_BROADLEAF")
+        self.assertTrue(obj.visible_shadow)
+        self.edit(obj, hair_shadows=False)
+        self.assertFalse(obj.visible_shadow)
+        self.assertEqual(len(self.render()), 4)
+        # Other styles have no leaf shadows to switch: the tree's shadows come back.
+        self.edit(obj, canopy_style="BLOBS")
+        self.assertTrue(obj.visible_shadow)
+        # Shadows the user turned off stay off.
+        obj.visible_shadow = False
+        tree_generator.regenerate(obj)
+        self.assertFalse(obj.visible_shadow)
+
     def test_make_leaf_object(self):
         obj = self.add("ROSETTE_BROADLEAF")
         settings = obj.rct_tree

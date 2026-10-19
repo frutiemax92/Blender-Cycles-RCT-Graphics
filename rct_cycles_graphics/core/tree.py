@@ -314,7 +314,8 @@ GROUPS = (
                 "hair_shadows",
                 True,
                 "Strand Shadows",
-                "Strands shade each other and the trunk; off avoids near-black gaps inside dense crowns",
+                "Strands or leaves shade each other and the trunk; off avoids near-black gaps inside dense crowns "
+                "(leaves share the tree's object, so off stops the whole tree casting shadows)",
             ),
             Param("hair_children", 0, "Children", "Extra strands rendered around each strand", (0, 20), (0, 1000)),
             Param("hair_child_radius", 0.08, "Child Spread", "How far the children grow from their strand", (0.0, 0.5), (0.0, 5.0), "bu"),

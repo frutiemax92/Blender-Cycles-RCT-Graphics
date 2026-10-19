@@ -28,6 +28,8 @@ HAIR_NAME = "RCT Tree Hair"
 HAIR_LENGTH_GROUP = "Length"
 #: Hair segments; from 5 on, the length vertex group scales strands linearly.
 HAIR_STEPS = 5
+#: Object property set while Leaf Shadows has turned the tree's shadows off.
+SHADOWS_OFF_KEY = "rct_leaf_shadows_off"
 #: Point attribute of leaf instances: (root-to-tip position, random value per leaf, 1).
 LEAF_ATTRIBUTE = "rct_leaf"
 #: Base name of the temporary metaball. Metaballs sharing a base name fuse,
@@ -664,6 +666,21 @@ def _leaf_template(settings):
     return verts.reshape(-1, 3), faces
 
 
+def sync_shadows(obj, params):
+    """Leaf Shadows: leaves and trunk share the tree object, so it switches the whole object's shadows.
+
+    Only shadows this turned off are turned back on, so a tree whose shadows
+    the user disabled by hand keeps them off.
+    """
+    off = params.canopy_style == "INSTANCES" and not params.hair_shadows
+    if off:
+        obj.visible_shadow = False
+        obj[SHADOWS_OFF_KEY] = True
+    elif obj.get(SHADOWS_OFF_KEY):
+        obj.visible_shadow = True
+        del obj[SHADOWS_OFF_KEY]
+
+
 def _footprint_box(settings):
     half = projection.TILE_SIZE / 2.0
     if settings.size == "LARGE":
@@ -692,6 +709,7 @@ def regenerate(obj):
     if old is not None and old.users == 0:
         bpy.data.meshes.remove(old)
     sync_hair(obj, params, data.strands)
+    sync_shadows(obj, params)
     assign_slots(obj)
 
     warnings = data.warnings()

@@ -183,7 +183,9 @@ down, *Twist* twists it at random, and *Irregularity* changes each leaf's
 width and bend and jitters its vertices. *Face Up* turns the upper faces
 towards the sky. The leaves material shades each leaf like a strand, from
 Colour A at the root to Colour B at the tip, with its own brightness.
-Leafy Broadleaf uses about 3,000 long, narrow blades in the Hair Broadleaf
+*Leaf Shadows* (the hair's *Strand Shadows*) stops leaves shading each
+other; leaves and trunk share one object, so the whole tree stops casting
+shadows. Leafy Broadleaf uses about 3,000 long, narrow blades in the Hair Broadleaf
 crown. Rosette Broadleaf uses 200 large rosettes of very different sizes, each up
 to about 20 pixels across, so the crown's outline stays lumpy.
 

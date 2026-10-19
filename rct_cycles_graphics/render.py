@@ -182,6 +182,7 @@ class _SceneState:
             "color_mode": settings.color_mode,
             "exr_codec": settings.exr_codec,
             "frame": scene.frame_current,
+            "use_persistent_data": render.use_persistent_data,
         }
         self.media_type = getattr(settings, "media_type", None)
 
@@ -193,7 +194,7 @@ class _SceneState:
             settings.media_type = self.media_type
         for key in ("file_format", "color_depth", "color_mode", "exr_codec"):
             setattr(settings, key, self.values[key])
-        for key in ("filepath", "resolution_x", "resolution_y", "resolution_percentage"):
+        for key in ("filepath", "resolution_x", "resolution_y", "resolution_percentage", "use_persistent_data"):
             setattr(render, key, self.values[key])
         scene.frame_set(self.values["frame"])
 
@@ -264,6 +265,10 @@ class Renderer:
     def __enter__(self):
         self._state = _SceneState(self.scene)
         scene_setup.configure_render(self.scene)
+        # Keep the evaluated scene between renders: otherwise every sprite
+        # rebuilds heavy modifier stacks (subdivision, booleans) from scratch,
+        # which costs far more than the render itself.
+        self.scene.render.use_persistent_data = True
         _configure_passes(self.scene, self.view_layer)
         if self.factor > 1:
             self._normals = _surface_normals(self.scene, self.view_layer).__enter__()

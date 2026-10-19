@@ -33,8 +33,8 @@ SPRITE_PIXEL = TILE_SIZE * math.sqrt(2.0) / 64.0
 MIN_TUBE_RADIUS = 0.03
 #: Hard cap on branch polyline segments, to keep regeneration interactive.
 MAX_SEGMENTS = 400
-#: Finest canopy mesh resolution (about two thirds of a pixel).
-MIN_RESOLUTION = 0.06
+#: Finest canopy mesh resolution (about a quarter of a pixel).
+MIN_RESOLUTION = 0.02
 #: The game clamps a small scenery bounding box to 128 z units.
 SMALL_HEIGHT_LIMIT = 128.0 / 16.0 * HEIGHT_STEP
 FACE_WARNING = 50000
@@ -1548,7 +1548,7 @@ def blob_spheres(blobs, resolution):
     """Separate (unmerged) icosphere per blob, as canopy surface (verts, faces)."""
     mesh = MeshData()
     for blob in blobs:
-        level = _subdivisions_for(blob[3] * max(blob[4], 1.0), resolution, 1, 3)
+        level = _subdivisions_for(blob[3] * max(blob[4], 1.0), resolution, 1, 4)
         verts, faces = icosphere(level)
         verts = verts @ blob_transform(blob).T + blob[:3]
         mesh.extend(MeshData(verts, faces))
@@ -1559,7 +1559,7 @@ def envelope_surface(envelope, resolution):
     """Mesh of the envelope surface: an icosphere projected radially onto it."""
     centre = envelope.centre
     size = max(envelope.radius, envelope.height)
-    verts, faces = icosphere(_subdivisions_for(size / 2.0, resolution, 2, 5))
+    verts, faces = icosphere(_subdivisions_for(size / 2.0, resolution, 2, 6))
     lo = np.zeros(len(verts))
     hi = np.full(len(verts), 2.0 * size + 1.0)
     for _ in range(32):

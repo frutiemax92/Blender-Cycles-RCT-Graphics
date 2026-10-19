@@ -317,6 +317,104 @@ class HairTests(unittest.TestCase):
         self.assertEqual(len(tree.hair_emitter(data.strands)[1]), 0)
 
 
+class LeafInstanceTests(unittest.TestCase):
+    def leaves(self, **values):
+        return tree.build(tree.preset_params("LEAFY_BROADLEAF", **values))
+
+    def test_one_leaf_per_strand_from_every_source(self):
+        for source in ("BRANCHES", "TIPS", "CANOPY", "VOLUME", "CLUMPS"):
+            data, mesh = self.leaves(hair_source=source, hair_count=300, branch_count=6)
+            params = data.params
+            template_verts, template_faces = tree.leaf_template(params.leaf_shape, params.leaf_width)
+            leaf_faces = [m for m in mesh.material if m == tree.LEAVES]
+            self.assertGreater(len(data.strands), 100, source)
+            self.assertEqual(len(leaf_faces), len(data.strands) * len(template_faces), source)
+            self.assertEqual(mesh.leaf.shape, (len(mesh.verts), 3))
+            self.assertLessEqual(mesh.verts[:, 2].max(), params.height + 1e-9)
+            self.assertGreaterEqual(mesh.verts[:, 2].min(), -1e-9)
+
+    def test_shading_attribute_flags_leaf_vertices_only(self):
+        _, mesh = self.leaves(hair_count=200)
+        flag = mesh.leaf[:, 2]
+        self.assertTrue(set(np.unique(flag)) <= {0.0, 1.0})
+        trunk_verts = {i for f, m in zip(mesh.faces, mesh.material) if m == tree.TRUNK for i in f}
+        leaf_verts = {i for f, m in zip(mesh.faces, mesh.material) if m == tree.LEAVES for i in f}
+        self.assertTrue((flag[list(trunk_verts)] == 0.0).all())
+        self.assertTrue((flag[list(leaf_verts)] == 1.0).all())
+        values = mesh.leaf[flag == 1.0]
+        self.assertGreaterEqual(values[:, 0].min(), 0.0)
+        self.assertLessEqual(values[:, 0].max(), 1.0)
+        # One random value per leaf, differing between leaves.
+        self.assertGreater(len(np.unique(values[:, 1])), 100)
+
+    def test_determinism_and_seed(self):
+        _, mesh_a = self.leaves(hair_count=200)
+        _, mesh_b = self.leaves(hair_count=200)
+        np.testing.assert_array_equal(mesh_a.verts, mesh_b.verts)
+        _, mesh_c = self.leaves(hair_count=200, seed=5)
+        self.assertFalse(np.array_equal(mesh_a.verts, mesh_c.verts))
+
+    def test_built_in_shapes_face_up_and_reach_one(self):
+        for shape in ("BLADE", "OVAL", "SPRIG"):
+            verts, faces = tree.leaf_template(shape, 0.3)
+            self.assertTrue((tree.face_normals(verts, faces)[:, 2] > 0.99).all(), shape)
+            self.assertAlmostEqual(verts[:, 0].max(), 1.0, msg=shape)
+            self.assertAlmostEqual(verts[:, 0].min(), 0.0, msg=shape)
+        narrow, _ = tree.leaf_template("BLADE", 0.1)
+        wide, _ = tree.leaf_template("BLADE", 0.5)
+        self.assertAlmostEqual(np.ptp(wide[:, 1]) / np.ptp(narrow[:, 1]), 5.0)
+
+    def test_custom_template_is_scaled_and_falls_back_to_the_blade(self):
+        square = ([(0.0, -1.0, 0.0), (4.0, -1.0, 0.0), (4.0, 1.0, 0.0), (0.0, 1.0, 0.0)], [(0, 1, 2, 3)])
+        verts, faces = tree.leaf_template("CUSTOM", 0.3, square)
+        self.assertAlmostEqual(verts[:, 0].max(), 1.0)
+        self.assertEqual(faces, [(0, 1, 2, 3)])
+        blade = tree.leaf_template("BLADE", 0.3)
+        np.testing.assert_array_equal(tree.leaf_template("CUSTOM", 0.3)[0], blade[0])
+        data, mesh = self.leaves(leaf_shape="CUSTOM", hair_count=50)
+        self.assertEqual(mesh.material.count(tree.LEAVES), len(data.strands) * len(blade[1]))
+        data, mesh = tree.build(tree.preset_params("LEAFY_BROADLEAF", leaf_shape="CUSTOM", hair_count=50), leaf_template=square)
+        self.assertEqual(mesh.material.count(tree.LEAVES), len(data.strands))
+
+    def test_deformations(self):
+        params = tree.preset_params("LEAFY_BROADLEAF")
+        template, _ = tree.leaf_template("BLADE", 0.3)
+        rng = np.random.default_rng(1)
+        plain = tree.make_params(leaf_fold=0.0, leaf_bend=0.0, leaf_twist=0.0, leaf_irregularity=0.0)
+        copies = tree.deform_leaves(template, 3, plain, rng)
+        np.testing.assert_allclose(copies, np.broadcast_to(template, copies.shape), atol=1e-5)
+        bent = tree.deform_leaves(template, 3, tree.make_params(leaf_bend=90.0, leaf_irregularity=0.0), rng)
+        tip = int(np.argmax(template[:, 0]))
+        self.assertTrue((bent[:, tip, 2] < -0.3).all())
+        # The bend keeps the midrib's length.
+        self.assertTrue(np.allclose(np.linalg.norm(bent[:, tip], axis=1), 2.0 * math.sqrt(2.0) / math.pi, atol=1e-3))
+        folded = tree.deform_leaves(template, 1, tree.make_params(leaf_fold=30.0, leaf_bend=0.0, leaf_twist=0.0, leaf_irregularity=0.0), rng)
+        edges = np.abs(template[:, 1]) > 1e-9
+        self.assertTrue((folded[0, edges, 2] > 0.0).all())
+        rough = tree.deform_leaves(template, 2, params, rng)
+        self.assertFalse(np.allclose(rough[0], rough[1]))
+        # The root stays on its branch.
+        np.testing.assert_allclose(rough[:, 0], 0.0, atol=1e-9)
+
+    def test_frames_face_up(self):
+        rng = np.random.default_rng(3)
+        directions = rng.normal(size=(200, 3))
+        directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+        frames = tree.leaf_frames(directions, tree.make_params(leaf_face_up=1.0), rng)
+        np.testing.assert_allclose(frames[:, :, 0], directions)
+        np.testing.assert_allclose(np.linalg.det(frames), 1.0)
+        self.assertTrue((frames[:, 2, 2] >= -1e-9).all())
+        rolled = tree.leaf_frames(directions, tree.make_params(leaf_face_up=0.0), rng)
+        self.assertTrue((rolled[:, 2, 2] < -0.1).any())
+
+    def test_top_facing_accent_on_leaves(self):
+        _, mesh = self.leaves(hair_count=300, accent_mode="TOP_FACING", accent_amount=0.5)
+        self.assertIn(tree.ACCENT, mesh.material)
+        _, mesh = self.leaves(hair_count=300, accent_mode="DOTS", accent_amount=0.5)
+        self.assertIn(tree.ACCENT, mesh.material)
+        self.assertEqual(len(mesh.leaf), len(mesh.verts))
+
+
 class PresetTests(unittest.TestCase):
     def test_every_preset_builds(self):
         for name, preset in tree.PRESETS.items():
@@ -325,9 +423,9 @@ class PresetTests(unittest.TestCase):
             roles = set(mesh.material)
             if params.trunk_length > 0:
                 self.assertIn(tree.TRUNK, roles, name)
-            if params.canopy_style == "HAIR":
+            if params.canopy_style in tree.STRAND_STYLES:
                 self.assertGreater(len(data.strands), 0, name)
-            elif params.canopy_style != "NONE":
+            if params.canopy_style not in ("HAIR", "NONE"):
                 self.assertIn(tree.LEAVES, roles, name)
             if params.accent_mode != "NONE":
                 self.assertIn(tree.ACCENT, roles, name)

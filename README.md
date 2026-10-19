@@ -108,7 +108,7 @@ full design.
 
 1. Pick a **preset** (Broadleaf, Birch, Gnarled Oak, Layered, Conifer, Snowy
    Conifer, Cypress, Shrub, Flowering Shrub, Topiary Ball/Cone/Heart,
-   Weeping, Blossom, Palm, Hair Palm, Hair Broadleaf, Bare) and click **Add Tree**. The tree's
+   Weeping, Blossom, Palm, Hair Palm, Hair Broadleaf, Leafy Broadleaf, Bare) and click **Add Tree**. The tree's
    footprint follows the scene's current object type and shape. The add-on
    then sets the object type to match and ticks the *Tree* flag.
 2. Select the tree to edit it. Settings are stored on the object, so a
@@ -122,7 +122,7 @@ full design.
 | Trunk | Length (where the trunk ends), base and top radius, taper, root flare, sides |
 | Trunk Shape | Straightness, bend frequency, gnarl, lean and lean direction, twist, forks |
 | Branches | Count, start/end height, bottom/top angle, length and length profile, radius ratio, curve, spread (spiral, whorled, random), sub-branches, jitter |
-| Leaves | Style (blobs, layers, needles, hair, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, needle length/width/spacing/angle/droop/rows, hair source/strands/length/angle/flatten/droop/width/children, mesh resolution |
+| Leaves | Style (blobs, layers, needles, hair, leaf instances, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, needle length/width/spacing/angle/droop/rows, hair source/strands/length/angle/flatten/droop/width/children, leaf shape/width/fold/bend/twist/irregularity/face up, mesh resolution |
 | Accent and Base | Dots (flowers, berries) or top-facing faces (snow); mound, pot or rocks base |
 
 **Materials.** The tree has four material slots: trunk, leaves, accent and
@@ -162,6 +162,25 @@ it uses the leaves material and is removed when you pick another style.
 Delete it together with the tree (*Delete Hierarchy*). Deep shadow between
 strands can quantize to dark reds and browns; restricting the palette to
 the leaf and bark ramps (Hair Broadleaf's suggested look) keeps it green.
+
+**Leaf instances.** The *Leaf Instances* style builds the crown out of
+copies of one small leaf mesh, as the original sprites do. Each copy is
+bent, twisted and jittered differently, so the leaves never repeat
+exactly. The leaves sit where hair strands would grow: the *Grow From*,
+count, size, angle, flatten and droop settings are shared with the Hair
+style (the panel renames them *Leaves*, *Leaf Size*, and so on). *Leaf
+Shape* picks a narrow blade, an oval leaf, a sprig of three blades, or a
+**Custom Object**. A custom *Leaf Object* is read in its own axes: root at
+the origin, growing along +X, upper face towards +Z. It is scaled so it
+reaches x = 1, and its modifiers apply. Hide it from renders, and click
+*Regenerate* after editing it. *Fold* lifts the leaf's edges about its
+midrib, so the two halves catch the light differently. *Bend* curls the leaf
+down, *Twist* twists it at random, and *Irregularity* changes each leaf's
+width and bend and jitters its vertices. *Face Up* turns the upper faces
+towards the sky. The leaves material shades each leaf like a strand, from
+Colour A at the root to Colour B at the tip, with its own brightness.
+Leafy Broadleaf uses about 3,000 long, narrow blades in the Hair Broadleaf
+crown.
 
 **Apply (Freeze Mesh)** turns the tree into a plain mesh for manual editing.
 Until then, regenerating replaces manual mesh edits.

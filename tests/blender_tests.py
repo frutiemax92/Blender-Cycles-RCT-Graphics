@@ -356,6 +356,38 @@ class TreeTests(unittest.TestCase):
         group = obj.rct_tree.material_leaves.node_tree.nodes[tree_generator.GROUP_NODE_NAME].node_tree
         self.assertTrue([n for n in group.nodes if n.type == "HAIR_INFO"])
 
+    def test_leaf_instances(self):
+        obj = self.add("LEAFY_BROADLEAF")
+        settings = obj.rct_tree
+        self.assertIsNone(settings.hair_object)
+        mesh = obj.data
+        attribute = mesh.attributes[tree_generator.LEAF_ATTRIBUTE]
+        values = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+        attribute.data.foreach_get("vector", values)
+        flags = values.reshape(-1, 3)[:, 2]
+        self.assertTrue(0 < flags.sum() < len(flags))
+        self.assertEqual(settings.stat_strands, settings.hair_count)
+        group = settings.material_leaves.node_tree.nodes[tree_generator.GROUP_NODE_NAME].node_tree
+        names = [n.attribute_name for n in group.nodes if n.type == "ATTRIBUTE"]
+        self.assertEqual(names, [tree_generator.LEAF_ATTRIBUTE])
+        self.assertEqual(len(self.render()), 4)
+
+        # A custom leaf: one quad per leaf.
+        self.edit(obj, hair_count=100, leaf_shape="CUSTOM")
+        self.assertIn("Leaf Object", settings.warnings)
+        bpy.ops.mesh.primitive_plane_add(size=1.0, location=(0.5, 0.0, 0.0))
+        bpy.ops.object.transform_apply(location=True)
+        leaf = bpy.context.active_object
+        leaf.hide_render = True
+        bpy.context.view_layer.objects.active = obj
+        self.edit(obj, leaf_object=leaf)
+        leaves = sum(1 for p in obj.data.polygons if p.material_index == tree.LEAVES)
+        self.assertEqual(leaves, settings.stat_strands)
+        self.assertNotIn("Leaf Object", settings.warnings)
+        leaf.hide_render = False
+        tree_generator.regenerate(obj)
+        self.assertIn("hide it from renders", settings.warnings)
+
     def test_old_role_groups_are_replaced(self):
         name = "{} {}".format(tree_generator.TREE_NAME, tree.ROLES[tree.LEAVES])
         old = tree_generator._build_role_group(name, tree.TRUNK)

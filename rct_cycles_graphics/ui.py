@@ -169,13 +169,16 @@ class RCT_PT_materials(bpy.types.Panel):
 def _tree_param_active(settings, name):
     """Whether a tree setting has an effect with the current choices."""
     style = settings.canopy_style
-    blobs = style not in ("TOPIARY", "NEEDLES", "HAIR", "NONE")
+    blobs = style not in ("TOPIARY", "NEEDLES", "NONE") + tree.STRAND_STYLES
     needles = style == "NEEDLES"
     hair = style == "HAIR"
+    leaves = style == "INSTANCES"
+    # Leaf instances sit where hair strands would grow, so they share the placement settings.
+    placed = hair or leaves
     hair_children = hair and settings.hair_children > 0
-    # Hair from clumps places them as the Blobs style does.
-    clumps = blobs or (hair and settings.hair_source == "CLUMPS")
-    noisy = style not in ("NEEDLES", "HAIR", "NONE")
+    # Hair and leaves from clumps place them as the Blobs style does.
+    clumps = blobs or (placed and settings.hair_source == "CLUMPS")
+    noisy = style not in ("NEEDLES", "NONE") + tree.STRAND_STYLES
     conditions = {
         "large_width": settings.size == "LARGE",
         "large_length": settings.size == "LARGE",
@@ -187,25 +190,25 @@ def _tree_param_active(settings, name):
         "canopy_shape": style != "NONE",
         "clump_size": clumps,
         "clump_size_variation": clumps,
-        "clump_count": style in ("BLOBS", "LAYERS", "STRANDS") or (clumps and hair),
-        "clumps_per_tip": style in ("BLOBS", "LAYERS", "COLUMN", "STRANDS") or (clumps and hair),
+        "clump_count": style in ("BLOBS", "LAYERS", "STRANDS") or (clumps and placed),
+        "clumps_per_tip": style in ("BLOBS", "LAYERS", "COLUMN", "STRANDS") or (clumps and placed),
         "clump_flatten": clumps,
         "blob_merge": blobs,
         "droop": clumps,
-        "hollow": (clumps and style != "COLUMN") or needles or (hair and settings.hair_source == "BRANCHES"),
+        "hollow": (clumps and style != "COLUMN") or needles or (placed and settings.hair_source == "BRANCHES"),
         "needle_length": needles,
         "needle_width": needles,
         "needle_spacing": needles,
         "needle_angle": needles,
         "needle_droop": needles,
         "needle_rows": needles,
-        "hair_source": hair,
-        "hair_count": hair,
-        "hair_length": hair,
-        "hair_length_variation": hair,
-        "hair_spread": hair,
-        "hair_flatten": hair and settings.hair_source == "BRANCHES",
-        "hair_droop": hair,
+        "hair_source": placed,
+        "hair_count": placed,
+        "hair_length": placed,
+        "hair_length_variation": placed,
+        "hair_spread": placed,
+        "hair_flatten": placed and settings.hair_source == "BRANCHES",
+        "hair_droop": placed,
         "hair_width": hair,
         "hair_tip_width": hair,
         "hair_shadows": hair,
@@ -213,6 +216,13 @@ def _tree_param_active(settings, name):
         "hair_child_radius": hair_children,
         "hair_clump": hair_children,
         "hair_roughness": hair_children,
+        "leaf_shape": leaves,
+        "leaf_width": leaves and settings.leaf_shape != "CUSTOM",
+        "leaf_fold": leaves,
+        "leaf_bend": leaves,
+        "leaf_twist": leaves,
+        "leaf_irregularity": leaves,
+        "leaf_face_up": leaves,
         "lumpiness": noisy,
         "lump_scale": noisy or (settings.accent_mode == "TOP_FACING" and not hair),
         "raggedness": noisy,
@@ -224,6 +234,16 @@ def _tree_param_active(settings, name):
         "base_height": settings.base_style != "NONE",
     }
     return conditions.get(name, True)
+
+
+#: Labels of the shared strand settings when they place leaf instances.
+_LEAF_LABELS = {
+    "hair_count": "Leaves",
+    "hair_length": "Leaf Size",
+    "hair_length_variation": "Size Variation",
+    "hair_spread": "Leaf Angle",
+    "hair_droop": "Leaf Droop",
+}
 
 
 class RCT_PT_tree(bpy.types.Panel):
@@ -273,8 +293,12 @@ class RCT_PT_tree(bpy.types.Panel):
                 if param.name == "height":
                     col.prop(settings, "height_display")
                     col.prop(settings, "height_unit")
+                elif settings.canopy_style == "INSTANCES" and param.name in _LEAF_LABELS:
+                    col.prop(settings, param.name, text=_LEAF_LABELS[param.name])
                 else:
                     col.prop(settings, param.name)
+                if param.name == "leaf_shape" and settings.leaf_shape == "CUSTOM":
+                    col.prop(settings, "leaf_object")
 
         header, body = layout.panel("rct_tree_materials", default_closed=False)
         header.label(text="Materials")
@@ -293,6 +317,8 @@ class RCT_PT_tree(bpy.types.Panel):
         counts = "{:,} faces".format(settings.stat_faces)
         if settings.canopy_style == "HAIR":
             counts += " · {:,} strands".format(settings.stat_strands)
+        elif settings.canopy_style == "INSTANCES":
+            counts += " · {:,} leaves".format(settings.stat_strands)
         box.label(
             text="{} · {:g} clearance units · {}".format(counts, clearance, fits).replace(",", " "),
             icon="CHECKMARK" if settings.stat_fits else "INFO",

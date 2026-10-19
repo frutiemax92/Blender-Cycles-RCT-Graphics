@@ -4,7 +4,8 @@ The geometry comes from ``core/tree.py``. This module turns it into one mesh
 object with four material slots (trunk, leaves, accent, base), merges canopy
 blobs with a temporary metaball, and keeps the scene's object type in step
 with the tree's footprint. The hair canopy style adds a child object whose
-hidden emitter mesh grows the strands as particle hair.
+hidden emitter mesh grows the strands as particle hair; the leaf instance
+style copies a leaf mesh (built in, or the user's Leaf Object) into the tree.
 """
 
 import math
@@ -26,6 +27,8 @@ HAIR_NAME = "RCT Tree Hair"
 HAIR_LENGTH_GROUP = "Length"
 #: Hair segments; from 5 on, the length vertex group scales strands linearly.
 HAIR_STEPS = 5
+#: Point attribute of leaf instances: (root-to-tip position, random value per leaf, 1).
+LEAF_ATTRIBUTE = "rct_leaf"
 #: Base name of the temporary metaball. Metaballs sharing a base name fuse,
 #: so it must not match anything a user would create.
 METABALL_NAME = "RCT_TreeCanopyTemp"
@@ -212,7 +215,7 @@ def _colour_socket(sockets, name, kind="RGBA"):
 
 
 #: Bumped when the role groups change; older groups in a file are replaced.
-ROLE_GROUP_VERSION = 2
+ROLE_GROUP_VERSION = 3
 
 
 def role_group(role):
@@ -281,9 +284,9 @@ def _build_role_group(name, role):
         _link(group, combined, 0, factor, "Value")
         _link(group, voronoi, "Distance", bump, "Height")
         group.links.new(mix_result, outputs.inputs["Color"])
-        # Hair strands: Colour A at the root to Colour B at the tip, each
-        # strand a little lighter or darker, and no speckle or bump, so
-        # every strand reads as one stroke.
+        # Hair strands and leaf instances: Colour A at the root to Colour B
+        # at the tip, each strand or leaf a little lighter or darker, and no
+        # speckle or bump, so every strand or leaf reads as one stroke.
         hair = nodes.new("ShaderNodeHairInfo")
         hair.location = (-650, 550)
         brightness = _math(group, "MULTIPLY_ADD", (-450, 550), b=0.8)
@@ -296,11 +299,37 @@ def _build_role_group(name, role):
         pick.data_type = "FLOAT"
         pick.location = (-80, 400)
         _link(group, hair, "Is Strand", pick, "Factor")
-        group.links.new(factor.outputs["Result"], _colour_socket(pick.inputs, "A", "VALUE"))
+        # Leaf instances: the same per-leaf brightness, lighter towards the tip.
+        attribute = nodes.new("ShaderNodeAttribute")
+        attribute.attribute_name = LEAF_ATTRIBUTE
+        attribute.location = (-900, 850)
+        leaf = nodes.new("ShaderNodeSeparateXYZ")
+        leaf.location = (-650, 850)
+        _link(group, attribute, "Vector", leaf, "Vector")
+        leaf_brightness = _math(group, "MULTIPLY_ADD", (-450, 900), b=0.8)
+        leaf_brightness.inputs[2].default_value = 0.4
+        _link(group, leaf, "Y", leaf_brightness, 0)
+        leaf_along = _math(group, "MULTIPLY_ADD", (-450, 750), b=0.65)
+        leaf_along.inputs[2].default_value = 0.35
+        _link(group, leaf, "X", leaf_along, 0)
+        leaf_value = _math(group, "MULTIPLY", (-250, 800), clamp=True)
+        _link(group, leaf_along, 0, leaf_value, 0)
+        _link(group, leaf_brightness, 0, leaf_value, 1)
+        leaf_pick = nodes.new("ShaderNodeMix")
+        leaf_pick.data_type = "FLOAT"
+        leaf_pick.location = (-250, 300)
+        _link(group, leaf, "Z", leaf_pick, "Factor")
+        group.links.new(factor.outputs["Result"], _colour_socket(leaf_pick.inputs, "A", "VALUE"))
+        group.links.new(leaf_value.outputs[0], _colour_socket(leaf_pick.inputs, "B", "VALUE"))
+        group.links.new(_colour_socket(leaf_pick.outputs, "Result", "VALUE"), _colour_socket(pick.inputs, "A", "VALUE"))
         group.links.new(strand.outputs[0], _colour_socket(pick.inputs, "B", "VALUE"))
         group.links.new(_colour_socket(pick.outputs, "Result", "VALUE"), mix.inputs["Factor"])
+        # Bump only on canopy surfaces, not on strands or leaves.
+        shaped = _math(group, "MAXIMUM", (-250, -300))
+        _link(group, hair, "Is Strand", shaped, 0)
+        _link(group, leaf, "Z", shaped, 1)
         surface = _math(group, "SUBTRACT", (-80, -300), a=1.0)
-        _link(group, hair, "Is Strand", surface, 1)
+        _link(group, shaped, 0, surface, 1)
         strength = _math(group, "MULTIPLY", (80, -300))
         _link(group, inputs, "Bump Strength", strength, 0)
         _link(group, surface, 0, strength, 1)
@@ -507,6 +536,9 @@ def write_mesh(name, data):
     uv_layer = mesh.uv_layers.new(name="UVMap")
     uvs = np.fromiter(chain.from_iterable(chain.from_iterable(data.uvs)), dtype=np.float32, count=2 * len(loops))
     uv_layer.data.foreach_set("uv", uvs)
+    if data.leaf is not None:
+        attribute = mesh.attributes.new(LEAF_ATTRIBUTE, "FLOAT_VECTOR", "POINT")
+        attribute.data.foreach_set("vector", data.leaf.astype(np.float32).ravel())
     mesh.update(calc_edges=True)
     mesh.validate(clean_customdata=False)
     return mesh
@@ -615,6 +647,22 @@ def sync_hair(obj, params, strands):
     hair.visible_shadow = params.hair_shadows
 
 
+def _leaf_template(settings):
+    """(verts, faces) of the Leaf Object's evaluated mesh in its own axes, or None."""
+    leaf = settings.leaf_object
+    if settings.leaf_shape != "CUSTOM" or leaf is None or leaf.type != "MESH":
+        return None
+    evaluated = leaf.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try:
+        verts = np.empty(len(mesh.vertices) * 3)
+        mesh.vertices.foreach_get("co", verts)
+        faces = [tuple(p.vertices) for p in mesh.polygons]
+    finally:
+        evaluated.to_mesh_clear()
+    return verts.reshape(-1, 3), faces
+
+
 def _footprint_box(settings):
     half = projection.TILE_SIZE / 2.0
     if settings.size == "LARGE":
@@ -630,7 +678,8 @@ def regenerate(obj):
     settings = obj.rct_tree
     _sync_from_slots(obj)
     params = to_params(settings)
-    data, mesh_data = tree.build(params, polygonize)
+    template = _leaf_template(settings)
+    data, mesh_data = tree.build(params, polygonize, template)
 
     with suspended_updates():
         for role in range(len(ROLE_KEYS)):
@@ -652,8 +701,17 @@ def regenerate(obj):
         warnings.append("No hair strands: they need branches inside the footprint")
     if params.canopy_style == "HAIR" and params.accent_mode == "TOP_FACING":
         warnings.append(tree.NOTE + "Top Facing accent has no effect on hair; Dots go on the strand tips")
+    if params.canopy_style == "INSTANCES":
+        leaf = settings.leaf_object
+        if len(data.strands) == 0:
+            warnings.append("No leaves: they need branches inside the footprint")
+        if params.leaf_shape == "CUSTOM" and (template is None or not template[1]):
+            warnings.append("Custom leaf shape needs a Leaf Object with faces; using the blade")
+        elif params.leaf_shape == "CUSTOM" and not leaf.hide_render:
+            warnings.append(tree.NOTE + "The Leaf Object renders too; hide it from renders")
     settings.stat_faces = faces
-    settings.stat_strands = len(data.strands) * (1 + params.hair_children)
+    children = params.hair_children if params.canopy_style == "HAIR" else 0
+    settings.stat_strands = len(data.strands) * (1 + children)
     verts = mesh_data.verts
     if len(data.strands):
         verts = np.concatenate([verts, data.strands.tips])
@@ -790,6 +848,16 @@ class TreeSettings(bpy.types.PropertyGroup):
     stat_fits: BoolProperty(default=True, options={"HIDDEN"})
     stat_strands: IntProperty(default=0, options={"HIDDEN"})
     hair_object: PointerProperty(type=bpy.types.Object, name="Hair Object", options={"HIDDEN"})
+    leaf_object: PointerProperty(
+        type=bpy.types.Object,
+        name="Leaf Object",
+        description=(
+            "Mesh copied for every leaf, in its own axes: root at the origin, growing along +X, "
+            "upper face towards +Z; scaled so it reaches x = 1. Regenerate after editing it"
+        ),
+        poll=lambda self, obj: obj.type == "MESH" and not obj.rct_tree.enabled and obj != self.hair_object,
+        update=_on_change,
+    )
 
 
 for _param in tree.PARAMETERS:

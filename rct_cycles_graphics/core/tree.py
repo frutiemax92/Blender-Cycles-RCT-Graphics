@@ -9,9 +9,11 @@ changing one stage's settings never reshuffles another:
    canopy envelope, according to the canopy style. The needle style uses
    no blobs: thin triangles hang from the branches instead. The hair style
    uses straight strands that the Blender side renders as particle hair.
+   The leaf instance style places a copy of a small leaf mesh where each
+   strand would be, bent and deformed differently every time.
 3. **Mesh data**: tubes for the trunk and branches, the canopy surface
    (icospheres here, or a metaball surface supplied by the Blender side;
-   needles for the needle style),
+   needles for the needle style, leaf copies for the leaf instance style),
    noise displacement, accent dots or snow faces, and an optional base.
    Hair strands are returned on the side, as roots, directions and lengths.
 
@@ -47,6 +49,8 @@ FACE_WARNING = 50000
 NOTE = "Note: "
 
 ROLES = ("Trunk", "Leaves", "Accent", "Base")
+#: Canopy styles placed as strands: hair renders them, leaf instances put a leaf on each.
+STRAND_STYLES = ("HAIR", "INSTANCES")
 TRUNK, LEAVES, ACCENT, BASE = range(4)
 
 GOLDEN_ANGLE = 137.50776405
@@ -89,6 +93,7 @@ CANOPY_STYLES = _enum(
     ("LAYERS", "Layers", "One flattened cluster per branch tip"),
     ("NEEDLES", "Needles", "Thin needle planes in a fishbone along each branch (pines)"),
     ("HAIR", "Hair", "Straight strands rendered with Blender's hair particles (fine palm fronds, grasses)"),
+    ("INSTANCES", "Leaf Instances", "Copies of a small leaf mesh, each bent and deformed at random (textured, leafy crowns)"),
     ("TIERS", "Tiers", "Elongated, drooping clumps along each branch"),
     ("COLUMN", "Column", "Clumps stacked along the trunk (cypress)"),
     ("TOPIARY", "Topiary", "The envelope itself is the canopy surface"),
@@ -125,6 +130,12 @@ HAIR_SOURCES = _enum(
     ("CANOPY", "Canopy Surface", "Out of the canopy shape's surface"),
     ("VOLUME", "Canopy Volume", "From all through the canopy shape, pointing outwards (dense bushy crowns)"),
     ("CLUMPS", "Clumps", "Fluffy tufts out of clumps placed as in the Blobs style (irregular bushy crowns)"),
+)
+LEAF_SHAPES = _enum(
+    ("BLADE", "Blade", "A narrow, pointed leaf folded along its midrib"),
+    ("OVAL", "Oval", "A broad, rounded leaf"),
+    ("SPRIG", "Sprig", "Three blades fanned from one stem"),
+    ("CUSTOM", "Custom Object", "The mesh of the Leaf Object: its root at the origin, growing along +X, upper face towards +Z"),
 )
 BASE_STYLES = _enum(
     ("NONE", "None", "No base"),
@@ -274,10 +285,10 @@ GROUPS = (
             Param("needle_angle", 50.0, "Needle Angle", "Angle of the needles from their branch, towards its tip", (10.0, 90.0), (0.0, 90.0), "deg"),
             Param("needle_droop", 30.0, "Needle Droop", "How far the needles hang below their branch", (0.0, 80.0), (-60.0, 89.0), "deg"),
             Param("needle_rows", 2, "Needle Rows", "Needles on each side of a branch, fanned from above to below it", (1, 4), (1, 8)),
-            Param("hair_source", "BRANCHES", "Grow From", "Where the hair strands start", items=HAIR_SOURCES),
-            Param("hair_count", 600, "Strands", "Number of hair strands (particles)", (10, 4000), (1, 100000)),
-            Param("hair_length", 0.7, "Strand Length", "Length of the longest strands", (0.05, 3.0), (0.01, 20.0), "bu"),
-            Param("hair_length_variation", 0.3, "Length Variation", "Random shortening of each strand", (0.0, 1.0), (0.0, 1.0)),
+            Param("hair_source", "BRANCHES", "Grow From", "Where the hair strands or leaves start", items=HAIR_SOURCES),
+            Param("hair_count", 600, "Strands", "Number of hair strands (particles) or leaves", (10, 4000), (1, 100000)),
+            Param("hair_length", 0.7, "Strand Length", "Length of the longest strands or leaves", (0.05, 3.0), (0.01, 20.0), "bu"),
+            Param("hair_length_variation", 0.3, "Length Variation", "Random shortening of each strand or leaf", (0.0, 1.0), (0.0, 1.0)),
             Param(
                 "hair_spread",
                 60.0,
@@ -295,7 +306,7 @@ GROUPS = (
                 (0.0, 1.0),
                 (0.0, 1.0),
             ),
-            Param("hair_droop", 30.0, "Strand Droop", "Tilts the strands towards the ground (negative lifts them)", (0.0, 90.0), (-90.0, 90.0), "deg"),
+            Param("hair_droop", 30.0, "Strand Droop", "Tilts the strands or leaves towards the ground (negative lifts them)", (0.0, 90.0), (-90.0, 90.0), "deg"),
             Param("hair_width", 0.06, "Strand Width", "Strand width at its root; one sprite pixel is about 0.09", (0.01, 0.3), (0.001, 2.0), "bu"),
             Param("hair_tip_width", 0.2, "Tip Width", "Strand width at its tip, relative to the root", (0.0, 1.0), (0.0, 1.0)),
             Param(
@@ -308,6 +319,20 @@ GROUPS = (
             Param("hair_child_radius", 0.08, "Child Spread", "How far the children grow from their strand", (0.0, 0.5), (0.0, 5.0), "bu"),
             Param("hair_clump", 0.0, "Clump", "Pulls the children's tips to their strand (negative spreads them)", (-1.0, 1.0), (-1.0, 1.0)),
             Param("hair_roughness", 0.0, "Roughness", "Random offset of the children's tips", (0.0, 0.5), (0.0, 5.0), "bu"),
+            Param("leaf_shape", "BLADE", "Leaf Shape", "Mesh copied for every leaf", items=LEAF_SHAPES),
+            Param("leaf_width", 0.3, "Leaf Width", "Leaf width relative to its length", (0.05, 1.0), (0.01, 3.0)),
+            Param("leaf_fold", 25.0, "Fold", "Lifts the leaf's edges about its midrib, so its halves catch the light differently", (0.0, 60.0), (-80.0, 80.0), "deg"),
+            Param("leaf_bend", 40.0, "Bend", "Curls each leaf towards its underside along its length (negative curls it up)", (-90.0, 180.0), (-360.0, 360.0), "deg"),
+            Param("leaf_twist", 30.0, "Twist", "Largest random twist along each leaf", (0.0, 90.0), (0.0, 360.0), "deg"),
+            Param(
+                "leaf_irregularity",
+                0.4,
+                "Irregularity",
+                "Random change of each leaf's width and bend, and jitter of its vertices",
+                (0.0, 1.0),
+                (0.0, 3.0),
+            ),
+            Param("leaf_face_up", 0.6, "Face Up", "1 turns every leaf's upper face to the sky, 0 rolls each leaf at random", (0.0, 1.0), (0.0, 1.0)),
             Param(
                 "resolution",
                 0.12,
@@ -462,6 +487,51 @@ _TOPIARY = {
 }
 _TOPIARY_LOOK = {"outline_shades": 1}
 _BRIGHT_LEAVES = {"leaves": (srgb(56, 110, 28), srgb(140, 190, 72))}
+
+_HAIR_BROADLEAF = _preset(
+    "Hair Broadleaf",
+    {
+        "height": 7.0,
+        "overhang": 1.5,
+        "trunk_length": 0.7,
+        "trunk_base_radius": 0.3,
+        "trunk_top_radius": 0.2,
+        "root_flare": 0.6,
+        "fork_count": 3,
+        "fork_height": 0.2,
+        "fork_angle": 14.0,
+        "branch_count": 0,
+        "canopy_style": "HAIR",
+        "canopy_shape": "ELLIPSOID",
+        "canopy_width": 1.2,
+        "canopy_height": 0.48,
+        "canopy_offset": 0.08,
+        "hair_source": "CLUMPS",
+        "clump_size": 1.1,
+        "clump_size_variation": 0.4,
+        "clump_flatten": 0.25,
+        "clump_count": 14,
+        # Few, wide strands: each one reads as a stroke, as in the originals.
+        "hair_count": 2600,
+        "hair_length": 0.8,
+        "hair_length_variation": 0.4,
+        "hair_spread": 70.0,
+        "hair_droop": 20.0,
+        "hair_width": 0.2,
+        "hair_tip_width": 0.5,
+    },
+    # Deep shadow between the strands would quantize to dark reds and
+    # browns; stronger ambient light lifts the crown's shadowed side.
+    look={
+        "ambient_strength": 1.5,
+        "palette_mode": "CUSTOM",
+        "palette_ramps": tuple(name in ("grey", "light_brown", "sea_green") for name, _ in RAMP_TITLES),
+    },
+    colours={
+        "trunk": (srgb(150, 95, 40), srgb(200, 140, 70)),
+        "leaves": (srgb(35, 95, 55), srgb(150, 205, 160)),
+    },
+)
 
 #: Presets modelled on the original game's tree families. Parameters a
 #: preset omits keep their defaults. ``look`` holds suggested scene render
@@ -679,49 +749,22 @@ PRESETS = {
         },
         colours={"trunk": (srgb(110, 70, 30), srgb(170, 110, 50)), "leaves": (srgb(20, 70, 40), srgb(90, 150, 90))},
     ),
-    "HAIR_BROADLEAF": _preset(
-        "Hair Broadleaf",
+    "HAIR_BROADLEAF": _HAIR_BROADLEAF,
+    "LEAFY_BROADLEAF": _preset(
+        "Leafy Broadleaf",
         {
-            "height": 7.0,
-            "overhang": 1.5,
-            "trunk_length": 0.7,
-            "trunk_base_radius": 0.3,
-            "trunk_top_radius": 0.2,
-            "root_flare": 0.6,
-            "fork_count": 3,
-            "fork_height": 0.2,
-            "fork_angle": 14.0,
-            "branch_count": 0,
-            "canopy_style": "HAIR",
-            "canopy_shape": "ELLIPSOID",
-            "canopy_width": 1.2,
-            "canopy_height": 0.48,
-            "canopy_offset": 0.08,
-            "hair_source": "CLUMPS",
-            "clump_size": 1.1,
-            "clump_size_variation": 0.4,
-            "clump_flatten": 0.25,
-            "clump_count": 14,
-            # Few, wide strands: each one reads as a stroke, as in the originals.
-            "hair_count": 2600,
-            "hair_length": 0.8,
-            "hair_length_variation": 0.4,
-            "hair_spread": 70.0,
-            "hair_droop": 20.0,
-            "hair_width": 0.2,
-            "hair_tip_width": 0.5,
+            "height": 7.8,
+            "canopy_style": "INSTANCES",
+            "canopy_height": 0.55,
+            # Long, narrow leaves pointing out of their clump: a spiky
+            # silhouette of one-pixel strokes, as in the original sprites.
+            "hair_count": 3000,
+            "hair_length": 0.95,
+            "hair_spread": 40.0,
+            "leaf_shape": "BLADE",
+            "leaf_width": 0.2,
         },
-        # Deep shadow between the strands would quantize to dark reds and
-        # browns; stronger ambient light lifts the crown's shadowed side.
-        look={
-            "ambient_strength": 1.5,
-            "palette_mode": "CUSTOM",
-            "palette_ramps": tuple(name in ("grey", "light_brown", "sea_green") for name, _ in RAMP_TITLES),
-        },
-        colours={
-            "trunk": (srgb(150, 95, 40), srgb(200, 140, 70)),
-            "leaves": (srgb(35, 95, 55), srgb(150, 205, 160)),
-        },
+        based_on=_HAIR_BROADLEAF,
     ),
     "BARE": _preset(
         "Bare",
@@ -1066,8 +1109,8 @@ def build_branches(params, skeleton, envelope, rng):
     jitter = params.jitter
     start, end = sorted((params.branch_start, params.branch_end))
     height = params.height
-    # Clumps may hang over the envelope; needles and hair grow outwards from the branch.
-    clump = 0.0 if params.canopy_style in ("NEEDLES", "HAIR") else params.clump_size
+    # Clumps may hang over the envelope; needles, hair and leaves grow outwards from the branch.
+    clump = 0.0 if params.canopy_style in ("NEEDLES",) + STRAND_STYLES else params.clump_size
 
     def inside(point):
         return point[2] <= height and envelope.sdf(point)[0] <= clump
@@ -1444,10 +1487,10 @@ def _strand_blobs(params, skeleton, tips, rng):
 
 def place_blobs(params, skeleton, tips, envelope, rng):
     style = params.canopy_style
-    if style == "HAIR" and params.hair_source == "CLUMPS":
-        # The clumps only place the hair; they get no surface.
+    if style in STRAND_STYLES and params.hair_source == "CLUMPS":
+        # The clumps only place the hair or leaves; they get no surface.
         style = "BLOBS"
-    if style in ("NONE", "TOPIARY", "NEEDLES", "HAIR"):
+    if style in ("NONE", "TOPIARY", "NEEDLES") + STRAND_STYLES:
         return np.zeros((0, BLOB_FIELDS))
     if style == "LAYERS":
         blobs = _layer_blobs(params, skeleton, rng)
@@ -1563,10 +1606,15 @@ def generate(params):
 
 
 class MeshData:
-    """Vertices and polygons with per-face role, smooth flag and per-corner UVs."""
+    """Vertices and polygons with per-face role, smooth flag and per-corner UVs.
 
-    def __init__(self, verts=None, faces=None, material=0, smooth=False, uvs=None):
+    ``leaf`` is None, or per vertex (position from root 0 to tip 1, random
+    value of its leaf, 1) on leaf instance vertices and (0, 0, 0) elsewhere.
+    """
+
+    def __init__(self, verts=None, faces=None, material=0, smooth=False, uvs=None, leaf=None):
         self.verts = np.zeros((0, 3)) if verts is None else np.asarray(verts, dtype=np.float64).reshape(-1, 3)
+        self.leaf = None if leaf is None else np.asarray(leaf, dtype=np.float64).reshape(-1, 3)
         self.faces = [tuple(int(i) for i in f) for f in (faces or [])]
         n = len(self.faces)
         self.material = [material] * n if np.isscalar(material) else list(material)
@@ -1577,6 +1625,10 @@ class MeshData:
 
     def extend(self, other):
         offset = len(self.verts)
+        if self.leaf is not None or other.leaf is not None:
+            mine = self.leaf if self.leaf is not None else np.zeros((offset, 3))
+            theirs = other.leaf if other.leaf is not None else np.zeros((len(other.verts), 3))
+            self.leaf = np.concatenate([mine, theirs])
         self.verts = np.concatenate([self.verts, other.verts])
         self.faces += [tuple(i + offset for i in f) for f in other.faces]
         self.material += other.material
@@ -2162,13 +2214,15 @@ def _hair_in_clumps(data, rng):
 def hair_strands(data):
     """Hair canopy strands (``Strands``), from the branches, the tips, the canopy surface or its volume.
 
+    The leaf instance style places one leaf on each strand, as long as it.
+
     Every strand tilts ``hair_droop`` towards the ground, loses up to
     ``hair_length_variation`` of its length at random, and is shortened to
     stay within the overhang radius and between the ground and the tree
     height; strands cut below a quarter of their length are dropped.
     """
     params = data.params
-    if params.canopy_style != "HAIR" or params.hair_count <= 0 or params.hair_length <= 0.0:
+    if params.canopy_style not in STRAND_STYLES or params.hair_count <= 0 or params.hair_length <= 0.0:
         return Strands()
     rng = stage_rng(params.seed, "hair")
     source = {
@@ -2233,18 +2287,159 @@ def hair_accents(strands, params):
     return mesh
 
 
-def canopy_mesh(data, verts, faces):
-    """Displaced canopy plus accent, from a raw canopy surface."""
+#: Stations along a leaf blade, between its root and its tip.
+LEAF_STATIONS = (0.12, 0.35, 0.6, 0.82)
+
+
+def _blade(width, profile, start=(0.0, 0.0), length=1.0, yaw=0.0):
+    """A flat leaf in the XY plane, rooted at ``start`` and pointing ``yaw`` from +X: (verts, faces).
+
+    ``profile(t)`` is the half-width at ``t`` (0 to 1 along the leaf),
+    relative to ``width``. Each station has a midrib vertex and two edge
+    vertices, so the leaf can fold along its midrib.
+    """
+    axis = np.array([math.cos(yaw), math.sin(yaw), 0.0])
+    side = np.array([-math.sin(yaw), math.cos(yaw), 0.0])
+    origin = np.array([start[0], start[1], 0.0])
+    verts = [origin]
+    for t in LEAF_STATIONS:
+        reach = width * profile(t) * length
+        mid = origin + axis * (t * length)
+        verts.extend((mid, mid + side * reach, mid - side * reach))
+    verts.append(origin + axis * length)
+    tip = len(verts) - 1
+    faces = []
+    for offset in (1, 2):
+        # Edge vertex ``offset`` after its midrib vertex: 1 is the +Y edge, 2 the -Y edge.
+        half = [(0, 1 + offset, 1)]
+        for k in range(len(LEAF_STATIONS) - 1):
+            a, b = 1 + 3 * k, 1 + 3 * (k + 1)
+            half += [(a, a + offset, b + offset), (a, b + offset, b)]
+        last = 1 + 3 * (len(LEAF_STATIONS) - 1)
+        half.append((last, last + offset, tip))
+        # Counter-clockwise from above on the -Y half; reversed on the +Y half, so both face +Z.
+        faces += [tuple(reversed(f)) for f in half] if offset == 1 else half
+    return np.array(verts), faces
+
+
+def _merge(parts):
+    verts, faces = [], []
+    for part_verts, part_faces in parts:
+        faces += [tuple(i + len(verts) for i in f) for f in part_faces]
+        verts += list(part_verts)
+    return np.array(verts, dtype=np.float64).reshape(-1, 3), faces
+
+
+def leaf_template(shape, width, custom=None):
+    """Leaf mesh of ``shape``, rooted at the origin along +X and about 1 long: (verts, faces).
+
+    ``custom`` is the (verts, faces) of the custom shape, scaled so that it
+    reaches x = 1; without one, the custom shape falls back to the blade.
+    """
+    if shape == "CUSTOM" and custom is not None and len(custom[1]):
+        verts = np.asarray(custom[0], dtype=np.float64).reshape(-1, 3)
+        reach = float(verts[:, 0].max())
+        if reach <= 1e-6:
+            reach = float(np.ptp(verts, axis=0).max())
+        return verts / max(reach, 1e-6), [tuple(int(i) for i in f) for f in custom[1]]
+    half = width / 2.0
+    if shape == "OVAL":
+        return _blade(half, lambda t: math.sin(math.pi * t) ** 0.6)
+    pointed = lambda t: math.sin(math.pi * t**0.75) ** 1.2  # noqa: E731
+    if shape == "SPRIG":
+        side = math.radians(38.0)
+        return _merge(
+            (
+                _blade(half, pointed),
+                _blade(half * 0.9, pointed, (0.22, 0.0), 0.68, side),
+                _blade(half * 0.9, pointed, (0.22, 0.0), 0.68, -side),
+            )
+        )
+    return _blade(half, pointed)
+
+
+def deform_leaves(template, count, params, rng):
+    """``count`` deformed copies of a leaf template in its own frame: (count, V, 3).
+
+    Every copy folds about its midrib (``leaf_fold``), twists by up to
+    ``leaf_twist`` and curls ``leaf_bend`` towards its underside; with
+    ``leaf_irregularity``, its width and bend change and its vertices jitter
+    (more towards the tip, so the root stays on its branch).
+    """
+    verts = np.asarray(template, dtype=np.float64)
+    along = np.clip(verts[:, 0], 0.0, 1.0)
+    irregular = params.leaf_irregularity
+    shape = (count, 1)
+    width = 1.0 + irregular * rng.uniform(-0.35, 0.35, shape)
+    x = np.broadcast_to(verts[:, 0], (count, len(verts)))
+    y = verts[:, 1] * width
+    z = verts[:, 2] + np.abs(y) * math.tan(math.radians(params.leaf_fold))
+    twist = math.radians(params.leaf_twist) * rng.uniform(-1.0, 1.0, shape) * x
+    y, z = y * np.cos(twist) - z * np.sin(twist), y * np.sin(twist) + z * np.cos(twist)
+    # Bend: the midrib follows an arc of curvature ``bend`` (per unit length) down towards -Z.
+    bend = math.radians(params.leaf_bend) * (1.0 + irregular * rng.uniform(-0.6, 0.6, shape))
+    bend = np.where(np.abs(bend) < 1e-6, 1e-6, bend)
+    theta = x * bend
+    radius = 1.0 / bend + z
+    x, z = radius * np.sin(theta), radius * np.cos(theta) - 1.0 / bend
+    result = np.stack([x, y, z], axis=-1)
+    result += irregular * 0.06 * rng.uniform(-1.0, 1.0, (count, len(verts), 3)) * along[None, :, None]
+    return result
+
+
+def leaf_frames(directions, params, rng):
+    """Rotation of each leaf, (N, 3, 3): its +X along the strand, its +Z up as far as ``leaf_face_up`` keeps it."""
+    d = np.asarray(directions, dtype=np.float64).reshape(-1, 3)
+    up = np.zeros_like(d)
+    up[:, 2] = 1.0
+    normal = up - d * d[:, 2:3]
+    vertical = np.linalg.norm(normal, axis=1) < 1e-6
+    normal[vertical] = np.cross(d[vertical], [0.0, 1.0, 0.0])
+    normal /= np.linalg.norm(normal, axis=1, keepdims=True)
+    side = np.cross(normal, d)
+    roll = rng.uniform(-1.0, 1.0, (len(d), 1)) * math.pi * (1.0 - params.leaf_face_up)
+    normal, side = normal * np.cos(roll) + side * np.sin(roll), side * np.cos(roll) - normal * np.sin(roll)
+    return np.stack([d, side, normal], axis=-1)
+
+
+def leaf_instances(data, custom=None):
+    """Leaf instance canopy: one deformed leaf per strand, (verts, faces, leaf shading).
+
+    Each leaf is as long as its strand and points along it. The shading
+    attribute (see ``MeshData``) holds each vertex's position from root to
+    tip, one random value per leaf and a leaf flag.
+    """
+    params = data.params
+    strands = data.strands
+    template, faces = leaf_template(params.leaf_shape, params.leaf_width, custom)
+    count = len(strands)
+    if count == 0 or len(faces) == 0:
+        return np.zeros((0, 3)), [], np.zeros((0, 3))
+    rng = np.random.default_rng(stage_seed(params.seed, "leaves"))
+    local = deform_leaves(template, count, params, rng) * strands.lengths[:, None, None]
+    frames = leaf_frames(strands.directions, params, rng)
+    verts = np.einsum("nij,nvj->nvi", frames, local) + strands.roots[:, None, :]
+    verts[:, :, 2] = np.clip(verts[:, :, 2], 0.0, params.height)
+    size = len(template)
+    all_faces = [tuple(int(i) + n * size for i in f) for n in range(count) for f in faces]
+    shade = np.ones((count, size, 3))
+    shade[:, :, 0] = np.clip(template[:, 0], 0.0, 1.0)
+    shade[:, :, 1] = rng.random((count, 1))
+    return verts.reshape(-1, 3), all_faces, shade.reshape(-1, 3)
+
+
+def canopy_mesh(data, verts, faces, leaf=None):
+    """Displaced canopy plus accent, from a raw canopy surface (``leaf`` as in ``MeshData``)."""
     params = data.params
     verts = np.asarray(verts, dtype=np.float64).reshape(-1, 3)
-    if params.canopy_style != "NEEDLES":
-        # Needles are already irregular; noise would only warp them.
+    if params.canopy_style not in ("NEEDLES", "INSTANCES"):
+        # Needles and leaves are already irregular; noise would only warp them.
         verts = displace(verts, faces, params)
     material = [LEAVES] * len(faces)
     if params.accent_mode == "TOP_FACING":
         for index in np.flatnonzero(top_facing(verts, faces, params)):
             material[index] = ACCENT
-    mesh = MeshData(verts, faces, material, False)
+    mesh = MeshData(verts, faces, material, False, leaf=leaf)
     if params.accent_mode == "DOTS":
         mesh.extend(accent_dots(verts, faces, params))
     return mesh
@@ -2263,8 +2458,8 @@ def canopy_surface(data, polygonize=None):
         return envelope_surface(data.envelope, resolution)
     if params.canopy_style == "NEEDLES":
         return needle_surface(data)
-    if params.canopy_style == "HAIR":
-        # The strands are rendered by Blender's hair particles instead.
+    if params.canopy_style in STRAND_STYLES:
+        # Hair is rendered by Blender's particles; leaves come from ``leaf_instances``.
         return np.zeros((0, 3)), []
     if len(data.blobs) == 0:
         return np.zeros((0, 3)), []
@@ -2273,17 +2468,24 @@ def canopy_surface(data, polygonize=None):
     return blob_spheres(data.blobs, resolution)
 
 
-def build(params, polygonize=None):
+def build(params, polygonize=None, leaf_template=None):
     """Generate a tree and its full mesh data: (TreeData, MeshData).
 
-    With the hair style, ``TreeData.strands`` holds the hair strands.
+    With the hair and leaf instance styles, ``TreeData.strands`` holds the
+    strands, one per leaf for the latter. ``leaf_template`` is the
+    (verts, faces) of the custom leaf shape.
     """
     data = generate(params)
     mesh = tube_mesh(data)
-    verts, faces = canopy_surface(data, polygonize)
-    if len(faces):
-        mesh.extend(canopy_mesh(data, verts, faces))
     data.strands = hair_strands(data)
-    mesh.extend(hair_accents(data.strands, params))
+    leaf = None
+    if params.canopy_style == "INSTANCES":
+        verts, faces, leaf = leaf_instances(data, leaf_template)
+    else:
+        verts, faces = canopy_surface(data, polygonize)
+    if len(faces):
+        mesh.extend(canopy_mesh(data, verts, faces, leaf))
+    if params.canopy_style == "HAIR":
+        mesh.extend(hair_accents(data.strands, params))
     mesh.extend(base_mesh(params, data.half_width, data.anchor))
     return data, mesh

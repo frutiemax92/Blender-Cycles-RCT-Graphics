@@ -214,7 +214,7 @@ class HairTests(unittest.TestCase):
         return tree.build(tree.preset_params("HAIR_PALM", **values))
 
     def test_strands_stay_inside_the_footprint_and_height(self):
-        for source in ("BRANCHES", "TIPS", "CANOPY"):
+        for source in ("BRANCHES", "TIPS", "CANOPY", "VOLUME"):
             for size in SIZES:
                 data, _ = self.hair(hair_source=source, hair_spread=120.0, hair_droop=-20.0, **size)
                 params, strands = data.params, data.strands
@@ -282,6 +282,16 @@ class HairTests(unittest.TestCase):
         accents = [f for f, m in zip(mesh.faces, mesh.material) if m == tree.ACCENT]
         self.assertEqual(len(accents), len(tree.icosphere(1)[1]) * round(0.1 * len(data.strands)))
         self.assertEqual(len(tree.hair_strands(tree.generate(tree.preset_params("BROADLEAF")))), 0)
+
+    def test_volume_strands_start_inside_the_envelope_and_point_out(self):
+        data, _ = self.hair(hair_source="VOLUME", hair_spread=0.0, hair_droop=0.0, jitter=0.0, hair_count=500)
+        roots = data.strands.roots
+        self.assertTrue((data.envelope.sdf(roots) <= 1e-9).all())
+        outward = roots - data.envelope.centre
+        self.assertTrue((np.einsum("ij,ij->i", outward, data.strands.directions) > 0.0).all())
+        # Roots fill the volume rather than a shell.
+        depth = -data.envelope.sdf(roots)
+        self.assertGreater((depth > 0.3 * data.envelope.radius).mean(), 0.1)
 
     def test_no_strands_without_count(self):
         data, _ = self.hair(hair_count=0)

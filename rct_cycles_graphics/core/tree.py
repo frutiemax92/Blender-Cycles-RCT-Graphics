@@ -29,6 +29,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from .palette import RAMP_TITLES
 from .projection import HEIGHT_STEP, TILE_SIZE
 
 #: One sprite pixel in BU: a tile's 64 pixel width spans its 4 * sqrt(2) BU diagonal.
@@ -122,6 +123,7 @@ HAIR_SOURCES = _enum(
     ("BRANCHES", "Branches", "Along each branch past its bare start, like fronds"),
     ("TIPS", "Branch Tips", "Tufts at the end of each branch and stem"),
     ("CANOPY", "Canopy Surface", "Out of the canopy shape's surface"),
+    ("VOLUME", "Canopy Volume", "From all through the canopy shape, pointing outwards (dense bushy crowns)"),
 )
 BASE_STYLES = _enum(
     ("NONE", "None", "No base"),
@@ -669,6 +671,45 @@ PRESETS = {
             "hair_child_radius": 0.08,
         },
         colours={"trunk": (srgb(110, 70, 30), srgb(170, 110, 50)), "leaves": (srgb(20, 70, 40), srgb(90, 150, 90))},
+    ),
+    "HAIR_BROADLEAF": _preset(
+        "Hair Broadleaf",
+        {
+            "height": 7.0,
+            "overhang": 1.45,
+            "trunk_length": 0.7,
+            "trunk_base_radius": 0.3,
+            "trunk_top_radius": 0.2,
+            "root_flare": 0.6,
+            "fork_count": 3,
+            "fork_height": 0.25,
+            "fork_angle": 14.0,
+            "branch_count": 0,
+            "canopy_style": "HAIR",
+            "canopy_shape": "ELLIPSOID",
+            "canopy_width": 1.0,
+            "canopy_height": 0.47,
+            "canopy_offset": 0.05,
+            "hair_source": "VOLUME",
+            "hair_count": 7000,
+            "hair_length": 1.05,
+            "hair_length_variation": 0.6,
+            "hair_spread": 80.0,
+            "hair_droop": 35.0,
+            "hair_width": 0.14,
+            "hair_tip_width": 0.3,
+            "hair_children": 2,
+            "hair_child_radius": 0.12,
+        },
+        # Deep shadow between the strands would quantize to dark reds and browns.
+        look={
+            "palette_mode": "CUSTOM",
+            "palette_ramps": tuple(name in ("grey", "light_brown", "sea_green") for name, _ in RAMP_TITLES),
+        },
+        colours={
+            "trunk": (srgb(150, 95, 40), srgb(200, 140, 70)),
+            "leaves": (srgb(30, 85, 50), srgb(125, 185, 140)),
+        },
     ),
     "BARE": _preset(
         "Bare",
@@ -2058,8 +2099,31 @@ def _hair_on_canopy(data, rng):
     return result
 
 
+def _hair_in_volume(data, rng):
+    params = data.params
+    envelope = data.envelope
+    centre = envelope.centre
+    lo = np.array([envelope.cx - envelope.radius, envelope.cy - envelope.radius, envelope.bottom])
+    hi = np.array([envelope.cx + envelope.radius, envelope.cy + envelope.radius, envelope.top])
+    sampler = np.random.default_rng(rng.getrandbits(32))
+    points = np.zeros((0, 3))
+    for _ in range(20):
+        if len(points) >= params.hair_count:
+            break
+        batch = lo + (hi - lo) * sampler.random((4 * params.hair_count, 3))
+        points = np.concatenate([points, batch[envelope.sdf(batch) <= 0.0]])
+    angle = math.radians(params.hair_spread)
+    result = []
+    for point in points[: params.hair_count]:
+        out = point - centre
+        # Outwards from the centre, or up from the centre itself.
+        axis = _normalize(out) if np.linalg.norm(out) > 1e-6 else np.array([0.0, 0.0, 1.0])
+        result.append((point, _cone_direction(axis, angle, rng), 1.0))
+    return result
+
+
 def hair_strands(data):
-    """Hair canopy strands (``Strands``), from the branches, the tips or the canopy surface.
+    """Hair canopy strands (``Strands``), from the branches, the tips, the canopy surface or its volume.
 
     Every strand tilts ``hair_droop`` towards the ground, loses up to
     ``hair_length_variation`` of its length at random, and is shortened to
@@ -2070,7 +2134,12 @@ def hair_strands(data):
     if params.canopy_style != "HAIR" or params.hair_count <= 0 or params.hair_length <= 0.0:
         return Strands()
     rng = stage_rng(params.seed, "hair")
-    source = {"BRANCHES": _hair_on_branches, "TIPS": _hair_at_tips, "CANOPY": _hair_on_canopy}[params.hair_source]
+    source = {
+        "BRANCHES": _hair_on_branches,
+        "TIPS": _hair_at_tips,
+        "CANOPY": _hair_on_canopy,
+        "VOLUME": _hair_in_volume,
+    }[params.hair_source]
     droop = math.radians(params.hair_droop)
     bounds = SimpleNamespace(cx=data.anchor[0], cy=data.anchor[1], radius=params.overhang * data.half_width)
     roots, directions, lengths = [], [], []

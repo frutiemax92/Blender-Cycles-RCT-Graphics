@@ -347,6 +347,13 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(len(bpy.data.particles), 0)
         self.assertFalse([m for m in bpy.data.meshes if m.users == 0 and m.name.startswith(tree_generator.HAIR_NAME)])
 
+    def test_hair_broadleaf_look(self):
+        obj = self.add("HAIR_BROADLEAF")
+        self.assertTrue(tree_generator.look_differs(obj.rct_tree, self.props))
+        bpy.ops.rct_graphics.tree_use_look()
+        self.assertFalse(tree_generator.look_differs(obj.rct_tree, self.props))
+        self.assertEqual(self.props.palette_mode, "CUSTOM")
+
     def test_hair_object_survives_regeneration_and_duplication(self):
         obj = self.add("HAIR_PALM")
         hair = obj.rct_tree.hair_object

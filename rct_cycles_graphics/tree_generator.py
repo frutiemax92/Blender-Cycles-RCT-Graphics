@@ -147,7 +147,12 @@ def look_differs(settings, props):
     preset = tree.PRESETS.get(settings.preset)
     if preset is None:
         return False
-    return any(getattr(props, key) != value for key, value in preset["look"].items())
+    return any(_look_value(getattr(props, key)) != value for key, value in preset["look"].items())
+
+
+def _look_value(value):
+    # Vector properties (the palette ramps) compare as tuples.
+    return tuple(value) if hasattr(value, "__len__") and not isinstance(value, str) else value
 
 
 # Materials -------------------------------------------------------------------------

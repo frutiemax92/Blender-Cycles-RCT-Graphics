@@ -108,7 +108,7 @@ full design.
 
 1. Pick a **preset** (Broadleaf, Birch, Gnarled Oak, Layered, Conifer, Snowy
    Conifer, Cypress, Shrub, Flowering Shrub, Topiary Ball/Cone/Heart,
-   Weeping, Blossom, Palm, Hair Palm, Bare) and click **Add Tree**. The tree's
+   Weeping, Blossom, Palm, Hair Palm, Hair Broadleaf, Bare) and click **Add Tree**. The tree's
    footprint follows the scene's current object type and shape. The add-on
    then sets the object type to match and ticks the *Tree* flag.
 2. Select the tree to edit it. Settings are stored on the object, so a
@@ -146,13 +146,16 @@ applies the preset's outline setting.
 **Hair leaves.** The *Hair* style renders the leaves as Blender particle
 hair, for fine, bushy fronds such as the RCT2 palms. The strands grow from
 the branches (like fronds, *Flatten* keeps them beside the branch), from
-the branch tips (tufts) or from the canopy surface. Each strand is straight,
+the branch tips (tufts), from the canopy surface, or from all through the
+canopy volume (dense bushy crowns such as Hair Broadleaf). Each strand is straight,
 tilted down by *Strand Droop* and kept inside the overhang and the tree
 height. *Children* adds rendered strands around each one, with *Child
 Spread*, *Clump* and *Roughness*. The hair lives on a child object,
 `RCT Tree Hair`, whose hidden emitter mesh has one tiny triangle per strand;
 it uses the leaves material and is removed when you pick another style.
-Delete it together with the tree (*Delete Hierarchy*).
+Delete it together with the tree (*Delete Hierarchy*). Deep shadow between
+strands can quantize to dark reds and browns; restricting the palette to
+the leaf and bark ramps (Hair Broadleaf's suggested look) keeps it green.
 
 **Apply (Freeze Mesh)** turns the tree into a plain mesh for manual editing.
 Until then, regenerating replaces manual mesh edits.

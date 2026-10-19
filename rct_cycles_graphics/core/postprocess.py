@@ -149,6 +149,9 @@ class Settings:
         outline_shades=0,
         outline_width=1,
         outline_diagonal=False,
+        tone_match=False,
+        tone_strength=1.0,
+        tone_saturation=True,
     ):
         self.alpha_threshold = alpha_threshold
         self.dither_method = dither_method
@@ -159,6 +162,9 @@ class Settings:
         self.outline_shades = outline_shades
         self.outline_width = outline_width
         self.outline_diagonal = outline_diagonal
+        self.tone_match = tone_match
+        self.tone_strength = tone_strength
+        self.tone_saturation = tone_saturation
 
 
 def edge_pixels(opaque, width=1, diagonal=False):
@@ -192,15 +198,17 @@ def apply_outline(indices, settings):
     return result
 
 
-def to_indices(rgba_linear, settings, remap=None, mask=None, opaque=None):
-    """Quantize a premultiplied linear RGBA render to palette indices.
+def prepare(rgba_linear, settings, remap=None, mask=None, opaque=None):
+    """The colours of a render as they go into quantization.
 
     remap: optional (H, W) int array with the recolour number (0-3) per pixel.
     mask: optional (H, W) bool array restricting the opaque pixels further
     (used to split large scenery into tiles).
     opaque: optional (H, W) bool silhouette replacing the alpha threshold
     (see resolve_supersampled).
-    Returns an (H, W) uint8 array, 0 being transparent.
+    Returns (rgb, classes, allowed): (H, W, 3) sRGB 0-255 colours, with
+    recolourable pixels projected onto their ramp; (H, W) classes, -1 for
+    transparent pixels; and the allowed palette indices per class.
     """
     alpha = rgba_linear[..., 3]
     if opaque is None:
@@ -227,6 +235,19 @@ def to_indices(rgba_linear, settings, remap=None, mask=None, opaque=None):
         allowed[remap_number] = palette.remap_indices(remap_number)
         selected = classes == remap_number
         rgb[selected] = project_onto_ramp(rgb[selected], allowed[remap_number])
+    return rgb, classes, allowed
+
+
+def to_indices(rgba_linear, settings, remap=None, mask=None, opaque=None, tone=None):
+    """Quantize a premultiplied linear RGBA render to palette indices.
+
+    See :func:`prepare` for the arguments; tone is an optional
+    :class:`tone.ToneCurve` applied before quantization.
+    Returns an (H, W) uint8 array, 0 being transparent.
+    """
+    rgb, classes, allowed = prepare(rgba_linear, settings, remap, mask, opaque)
+    if tone is not None:
+        rgb = tone.apply(rgb, classes, allowed)
     indices = quantize.quantize(
         rgb, classes, allowed, method=settings.dither_method, strength=settings.dither_strength
     )

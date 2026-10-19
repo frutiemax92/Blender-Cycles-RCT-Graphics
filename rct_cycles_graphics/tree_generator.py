@@ -773,7 +773,7 @@ class RCT_OT_tree_match_scene(_TreeOperator, bpy.types.Operator):
 
 
 class RCT_OT_tree_use_look(_TreeOperator, bpy.types.Operator):
-    """Use the outline and palette settings suggested by the tree's preset"""
+    """Use the outline, palette and tone settings suggested by the tree's preset"""
 
     bl_idname = "rct_graphics.tree_use_look"
     bl_label = "Use Suggested Look"

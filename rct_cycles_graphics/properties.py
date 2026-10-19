@@ -356,6 +356,39 @@ class RCTGraphicsProperties(bpy.types.PropertyGroup):
         subtype="FACTOR",
     )
 
+    # Tones ---------------------------------------------------------------
+
+    tone_match: BoolProperty(
+        name="Match RCT2 Tones",
+        description=(
+            "Move every pixel along its own colour ramp so the shading has the "
+            "brightness and contrast of the original RCT2 trees, whatever the "
+            "lighting. Hues are kept; all views get the same correction"
+        ),
+        default=False,
+    )
+
+    tone_strength: FloatProperty(
+        name="Strength",
+        description="How far the tones move towards the RCT2 trees",
+        default=1.0,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
+    )
+
+    tone_saturation: BoolProperty(
+        name="Match Saturation",
+        description="Also nudge the saturation of plain colours towards the RCT2 trees",
+        default=True,
+    )
+
+    tone_report: StringProperty(
+        name="Tone Report",
+        description="Shades used by the last render, compared with the RCT2 trees",
+        default="",
+    )
+
 
 # One checkbox per object.json flag, generated from the table shared with
 # the exporter.

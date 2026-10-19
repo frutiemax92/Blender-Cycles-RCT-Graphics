@@ -59,6 +59,18 @@ def draw_render_settings(layout, props):
     sub.active = props.dither_method != "NONE"
     sub.prop(props, "dither_strength")
 
+    col = layout.column(heading="Tones")
+    col.prop(props, "tone_match")
+    sub = col.column()
+    sub.active = props.tone_match
+    sub.prop(props, "tone_strength")
+    sub.prop(props, "tone_saturation")
+    if props.tone_report:
+        box = layout.box()
+        box.label(text="Last render:")
+        for line in props.tone_report.splitlines():
+            box.label(text=line)
+
 
 class RCT_PT_main(bpy.types.Panel):
     bl_label = "RCT Graphics"

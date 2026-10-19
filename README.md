@@ -178,6 +178,32 @@ silhouette. This add-on reproduces that with Cycles:
   Error is never diffused between plain and recolourable pixels.
 - Palette: full, grey only (vehicles) or a custom selection of colour ramps.
 
+## Matching the tones of the original trees
+
+The original trees sit low on the palette ramps: most of their pixels use the
+four darkest shades of a ramp, and the top shades are kept for a few
+highlights. Getting that from lighting and materials alone means a lot of
+trial and error. Tick **Match RCT2 Tones** under *Render & Colour* instead
+(*Use Suggested Look* turns it on for generated trees).
+
+- Every pixel moves along its own colour ramp until the object's shades are
+  spread like those of the 33 vanilla RCT2 trees (snow-covered ones aside).
+  Hues stay yours: an autumn tree stays orange, only its shading changes.
+- One curve is fitted over all views and frames, so every rotation gets the
+  same correction. The curve is smooth, so the render's own shading is kept.
+- Rim pixels are left out of the fit; *Outline Darkening* still adds the
+  contour on top.
+- **Strength** blends between the plain render (0) and the full match (1).
+  **Match Saturation** also nudges plain colours' saturation towards the
+  originals, by at most -15% / +25%.
+- After every render, the section shows the shades the sprites use next to
+  the RCT2 trees' (average shade, dark / mid / light shares), with or without
+  matching.
+
+Light and materials then shape the object; you no longer need them to set
+its exposure. Matching cannot invent shadow detail, though: if the ambient
+light fills every crevice, the darks come out as flat patches.
+
 ## Alignment: no more editing offsets by hand
 
 Misaligned stacks of walls, base blocks or roofs had two causes in the past:

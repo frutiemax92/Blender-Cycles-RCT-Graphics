@@ -9,7 +9,7 @@ import numpy as np
 
 from . import scene_setup
 from .core import jobs as jobs_core
-from .core import postprocess, projection
+from .core import postprocess, projection, tone
 
 #: AOVs written by recolourable materials (see materials.py): one coverage
 #: pass per remap, so pixels mixing two remaps are never averaged into a third.
@@ -334,19 +334,37 @@ def run_jobs(context, jobs, settings, progress=None, footprint=(1, 1)):
     groups = {}
     for job in jobs:
         groups.setdefault(job.render_key, []).append(job)
+    steps = 2 * len(groups)
 
+    # Render everything first: matching tones needs every view at once, so
+    # that all of them get the same correction.
+    results = []
     with Renderer(context) as renderer:
         for step, (key, group) in enumerate(sorted(groups.items(), key=lambda item: _sort_key(item[0]))):
             view, frame, variant = key
-            result = renderer.render(view, frame, variant)
-            if result is None:
-                for job in group:
-                    sprites[job.index] = postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)
-            else:
-                _make_sprites(result, group, settings, footprint, sprites)
+            results.append((renderer.render(view, frame, variant), group))
             if progress is not None:
-                progress(step + 1, len(groups))
+                progress(step + 1, steps)
+
+    curve = _fit_tone(results, settings) if settings.tone_match else None
+    for step, (result, group) in enumerate(results, start=len(groups)):
+        if result is None:
+            for job in group:
+                sprites[job.index] = postprocess.Sprite(np.zeros((0, 0), dtype=np.uint8), 0, 0)
+        else:
+            _make_sprites(result, group, settings, footprint, sprites, curve)
+        if progress is not None:
+            progress(step + 1, steps)
     return sprites
+
+
+def _fit_tone(results, settings):
+    samples = [
+        postprocess.prepare(result.rgba, settings, remap=result.classes, opaque=result.opaque)
+        for result, _ in results
+        if result is not None
+    ]
+    return tone.fit(samples, settings.tone_strength, settings.tone_saturation)
 
 
 def _sort_key(render_key):
@@ -354,10 +372,12 @@ def _sort_key(render_key):
     return (frame, "" if variant is None else str(variant), view)
 
 
-def _make_sprites(result, group, settings, footprint, sprites):
+def _make_sprites(result, group, settings, footprint, sprites, curve=None):
     # Quantize the whole render once, so dithering and outlines do not show
     # seams where large scenery is cut into tiles.
-    indices = postprocess.to_indices(result.rgba, settings, remap=result.classes, opaque=result.opaque)
+    indices = postprocess.to_indices(
+        result.rgba, settings, remap=result.classes, opaque=result.opaque, tone=curve
+    )
     tiles = None
     x0, y0 = result.bounds[0], result.bounds[1]
     for job in group:

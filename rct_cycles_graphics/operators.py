@@ -5,7 +5,7 @@ import bpy
 
 from . import preferences, render, scene_setup
 from .properties import flag_property, selected_ramps
-from .core import alignment, export, jobs, objectjson, postprocess
+from .core import alignment, export, jobs, objectjson, postprocess, tone
 
 
 class RCT_OT_initialize(bpy.types.Operator):
@@ -31,6 +31,9 @@ def postprocess_settings(props):
         outline_shades=props.outline_shades,
         outline_width=props.outline_width,
         outline_diagonal=props.outline_diagonal,
+        tone_match=props.tone_match,
+        tone_strength=props.tone_strength,
+        tone_saturation=props.tone_saturation,
     )
 
 
@@ -79,6 +82,7 @@ def render_sprites(context):
         window_manager.progress_end()
 
     export.write_sprites(directory, sprites)
+    props.tone_report = "\n".join(tone.report([sprite.indices for sprite in sprites.values()]))
     message = "Rendered {} sprites to {}".format(len(sprites), directory)
     if props.check_after_render:
         from . import alignment_tools

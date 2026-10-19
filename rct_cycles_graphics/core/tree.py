@@ -6,9 +6,11 @@ changing one stage's settings never reshuffles another:
 1. A **skeleton** of polylines: the trunk (or the leaders it forks into),
    first-level branches and optional sub-branches.
 2. A **canopy** of blobs (ellipsoids) placed from the branch tips and a
-   canopy envelope, according to the canopy style.
+   canopy envelope, according to the canopy style. The needle style uses
+   no blobs: thin triangles hang from the branches instead.
 3. **Mesh data**: tubes for the trunk and branches, the canopy surface
-   (icospheres here, or a metaball surface supplied by the Blender side),
+   (icospheres here, or a metaball surface supplied by the Blender side;
+   needles for the needle style),
    noise displacement, accent dots or snow faces, and an optional base.
 
 Units are Blender units (BU), angles in the parameter table are degrees.
@@ -82,7 +84,8 @@ SIZES = _enum(
 CANOPY_STYLES = _enum(
     ("BLOBS", "Blobs", "Clumps at the branch tips plus clumps scattered in the envelope"),
     ("LAYERS", "Layers", "One flattened cluster per branch tip"),
-    ("TIERS", "Tiers", "Elongated, drooping clumps along each branch (conifers)"),
+    ("NEEDLES", "Needles", "Thin needle planes in a fishbone along each branch (pines)"),
+    ("TIERS", "Tiers", "Elongated, drooping clumps along each branch"),
     ("COLUMN", "Column", "Clumps stacked along the trunk (cypress)"),
     ("TOPIARY", "Topiary", "The envelope itself is the canopy surface"),
     ("STRANDS", "Strands", "Chains of small clumps hanging from the tips (weeping trees)"),
@@ -246,7 +249,20 @@ GROUPS = (
             Param("lump_scale", 0.35, "Lump Scale", "Feature size of the lumps", (0.05, 2.0), (0.01, 10.0), "bu"),
             Param("raggedness", 0.3, "Raggedness", "Fine displacement giving a ragged silhouette", (0.0, 1.0), (0.0, 3.0)),
             Param("droop", 0.0, "Droop", "Pulls clumps down (weeping trees); also sets the strand length", (0.0, 1.0), (0.0, 2.0)),
-            Param("hollow", 0.0, "Hollow", "Removes clumps near the trunk so inner branches show", (0.0, 0.8), (0.0, 0.95)),
+            Param(
+                "hollow",
+                0.0,
+                "Hollow",
+                "Removes clumps near the trunk so inner branches show; with needles, the bare share of each branch",
+                (0.0, 0.8),
+                (0.0, 0.95),
+            ),
+            Param("needle_length", 0.5, "Needle Length", "Reach of the needles from their branch", (0.05, 1.5), (0.01, 5.0), "bu"),
+            Param("needle_width", 0.08, "Needle Width", "Width of each needle at its base; one sprite pixel is about 0.09", (0.01, 0.3), (0.002, 2.0), "bu"),
+            Param("needle_spacing", 0.06, "Needle Spacing", "Distance between needle pairs along a branch", (0.03, 0.5), (0.01, 5.0), "bu"),
+            Param("needle_angle", 50.0, "Needle Angle", "Angle of the needles from their branch, towards its tip", (10.0, 90.0), (0.0, 90.0), "deg"),
+            Param("needle_droop", 30.0, "Needle Droop", "How far the needles hang below their branch", (0.0, 80.0), (-60.0, 89.0), "deg"),
+            Param("needle_rows", 2, "Needle Rows", "Needles on each side of a branch, fanned from above to below it", (1, 4), (1, 8)),
             Param(
                 "resolution",
                 0.12,
@@ -347,7 +363,7 @@ _CONIFER = _preset(
         "root_flare": 0.4,
         "branch_spread": "WHORLED",
         "whorl_size": 5,
-        "branch_count": 45,
+        "branch_count": 70,
         "branch_start": 0.12,
         "branch_end": 0.92,
         "branch_angle_base": 100.0,
@@ -355,17 +371,18 @@ _CONIFER = _preset(
         "branch_length": 0.2,
         "branch_length_profile": "CONICAL",
         "branch_curve": -0.4,
-        "branch_radius_ratio": 0.3,
-        "canopy_style": "TIERS",
+        "branch_radius_ratio": 0.2,
+        "canopy_style": "NEEDLES",
         "canopy_shape": "CONE",
-        "canopy_width": 0.8,
+        "canopy_width": 0.95,
         "canopy_height": 0.9,
-        "clump_size": 0.42,
-        "clump_flatten": 0.5,
-        "blob_merge": 0.4,
-        "lumpiness": 0.2,
-        "raggedness": 0.6,
-        "droop": 0.3,
+        "hollow": 0.15,
+        "needle_length": 0.65,
+        "needle_width": 0.09,
+        "needle_spacing": 0.06,
+        "needle_angle": 45.0,
+        "needle_droop": 35.0,
+        "needle_rows": 3,
     },
 )
 _SHRUB = _preset(
@@ -565,12 +582,17 @@ PRESETS = {
             "branch_length_profile": "CONSTANT",
             "branch_curve": -0.7,
             "branch_radius_ratio": 0.3,
-            "canopy_style": "TIERS",
+            "canopy_style": "NEEDLES",
             "canopy_shape": "ELLIPSOID",
             "canopy_width": 1.3,
             "canopy_height": 0.45,
-            "clump_size": 0.45,
-            "clump_flatten": 0.7,
+            "hollow": 0.05,
+            "needle_length": 0.75,
+            "needle_width": 0.12,
+            "needle_spacing": 0.07,
+            "needle_angle": 55.0,
+            "needle_droop": 35.0,
+            "needle_rows": 1,
         },
         colours={"trunk": (srgb(120, 92, 60), srgb(150, 124, 90)), "leaves": (srgb(30, 80, 30), srgb(100, 160, 60))},
     ),
@@ -917,7 +939,8 @@ def build_branches(params, skeleton, envelope, rng):
     jitter = params.jitter
     start, end = sorted((params.branch_start, params.branch_end))
     height = params.height
-    clump = params.clump_size
+    # Clumps may hang over the envelope; needles grow outwards from the branch.
+    clump = 0.0 if params.canopy_style == "NEEDLES" else params.clump_size
 
     def inside(point):
         return point[2] <= height and envelope.sdf(point)[0] <= clump
@@ -1294,7 +1317,7 @@ def _strand_blobs(params, skeleton, tips, rng):
 
 def place_blobs(params, skeleton, tips, envelope, rng):
     style = params.canopy_style
-    if style in ("NONE", "TOPIARY"):
+    if style in ("NONE", "TOPIARY", "NEEDLES"):
         return np.zeros((0, BLOB_FIELDS))
     if style == "LAYERS":
         blobs = _layer_blobs(params, skeleton, rng)
@@ -1748,10 +1771,116 @@ def base_mesh(params, half_width, anchor):
     return mesh
 
 
+def _reach_limit(base, direction, envelope, height):
+    """Longest distance from ``base`` along ``direction`` inside the envelope radius and [0, height]."""
+    limit = math.inf
+    q = base[:2] - np.array([envelope.cx, envelope.cy])
+    d = direction[:2]
+    a, b, c = float(d @ d), 2.0 * float(q @ d), float(q @ q) - envelope.radius**2
+    if c > 0.0:
+        return 0.0
+    if a > 1e-12:
+        limit = (-b + math.sqrt(max(b * b - 4.0 * a * c, 0.0))) / (2.0 * a)
+    if direction[2] < -1e-9:
+        limit = min(limit, base[2] / -direction[2])
+    elif direction[2] > 1e-9:
+        limit = min(limit, (height - base[2]) / direction[2])
+    return max(limit, 0.0)
+
+
+def _needle_stations(polyline, start, spacing):
+    """Fractions of ``polyline`` from ``start`` to its end, about ``spacing`` apart."""
+    count = int((1.0 - start) * polyline.length / max(spacing, 1e-3))
+    if count < 1:
+        return np.zeros(0)
+    return start + (1.0 - start) * (np.arange(count) + 0.5) / count
+
+
+def needle_surface(data):
+    """Needle canopy: thin triangles in a fishbone along the branches, (verts, faces).
+
+    Each branch carries a pair of needles every ``needle_spacing``, one on
+    each side, angled ``needle_angle`` towards the tip and hanging
+    ``needle_droop`` down; with several ``needle_rows`` they fan out 25
+    degrees apart around that droop. Needles are longest a quarter of the
+    way along and shrink to the tip; the bare start of a branch is
+    ``hollow``. The top of each stem, above the highest branch, gets
+    needles all around.
+    Needles are kept inside the envelope radius and between the ground and
+    the tree height, and their faces point up so snow can settle on them.
+    """
+    params = data.params
+    envelope = data.envelope
+    rng = stage_rng(params.seed, "needles")
+    jitter = params.jitter
+    angle = math.radians(params.needle_angle)
+    droop = math.radians(params.needle_droop)
+    half_width = params.needle_width / 2.0
+    down = np.array([0.0, 0.0, -1.0])
+    up = np.array([0.0, 0.0, 1.0])
+    verts, faces = [], []
+
+    rows = max(1, params.needle_rows)
+    fan = [droop + math.radians(25.0) * (k - (rows - 1) / 2.0) for k in range(rows)]
+
+    def needle(base, tangent, side, length, tilt):
+        direction = _normalize(side * math.cos(angle) + tangent * math.sin(angle))
+        tilt += rng.uniform(-1.0, 1.0) * jitter * math.radians(10.0)
+        if tilt >= 0.0:
+            direction = _rotate_towards(direction, down, tilt)
+        else:
+            direction = _rotate_towards(direction, up, -tilt)
+        length *= 1.0 + rng.uniform(-0.25, 0.25) * jitter
+        length = min(length, _reach_limit(base, direction, envelope, params.height))
+        if length < 2.0 * half_width:
+            return
+        a, b, c = base - tangent * half_width, base + tangent * half_width, base + direction * length
+        if np.cross(b - a, c - a)[2] < 0.0:
+            a, b = b, a
+        faces.append((len(verts), len(verts) + 1, len(verts) + 2))
+        verts.extend((a, b, c))
+
+    stems = set(data.skeleton.stems)
+    for index, polyline in enumerate(data.polylines):
+        if index in stems or polyline.level == 0:
+            continue
+        for s in _needle_stations(polyline, params.hollow, params.needle_spacing):
+            base, tangent, _ = polyline.sample(s)
+            side = np.cross(up, tangent)
+            side = _normalize(side) if np.linalg.norm(side) > 1e-6 else _perpendicular(tangent)
+            v = (s - params.hollow) / max(1.0 - params.hollow, 1e-6)
+            length = params.needle_length * (0.6 + 0.4 * _smoothstep(v / 0.25)) * (1.0 - 0.75 * v**1.5)
+            for sign in (1.0, -1.0):
+                for tilt in fan:
+                    needle(base, tangent, sign * side, length, tilt)
+
+    # The leader: needles all around the stem above the highest branch.
+    branched = any(p.level > 0 for p in data.polylines)
+    start_z = envelope.bottom
+    if branched:
+        start_z = max(start_z, max(float(p.points[0][2]) for p in data.polylines if p.level == 1))
+    for k, index in enumerate(sorted(stems)):
+        stem = data.polylines[index]
+        for i, s in enumerate(_needle_stations(stem, 0.0, params.needle_spacing / 2.0)):
+            base, tangent, _ = stem.sample(s)
+            if base[2] < start_z:
+                continue
+            longest = params.needle_length * (0.6 if branched else 1.0)
+            # Short needles even where the envelope narrows to a point, so the tip is not bare.
+            length = min(max(envelope.radius_at(float(base[2])), 0.3 * longest), longest)
+            side = _horizontal(math.radians(GOLDEN_ANGLE * (i + 7 * k)))
+            side = _normalize(side - tangent * np.dot(side, tangent))
+            needle(base, tangent, side, length, droop * 0.5)
+    return np.array(verts, dtype=np.float64).reshape(-1, 3), faces
+
+
 def canopy_mesh(data, verts, faces):
     """Displaced canopy plus accent, from a raw canopy surface."""
     params = data.params
-    verts = displace(np.asarray(verts, dtype=np.float64).reshape(-1, 3), faces, params)
+    verts = np.asarray(verts, dtype=np.float64).reshape(-1, 3)
+    if params.canopy_style != "NEEDLES":
+        # Needles are already irregular; noise would only warp them.
+        verts = displace(verts, faces, params)
     material = [LEAVES] * len(faces)
     if params.accent_mode == "TOP_FACING":
         for index in np.flatnonzero(top_facing(verts, faces, params)):
@@ -1773,6 +1902,8 @@ def canopy_surface(data, polygonize=None):
     resolution = max(params.resolution, MIN_RESOLUTION)
     if params.canopy_style == "TOPIARY":
         return envelope_surface(data.envelope, resolution)
+    if params.canopy_style == "NEEDLES":
+        return needle_surface(data)
     if len(data.blobs) == 0:
         return np.zeros((0, 3)), []
     if polygonize is not None and params.blob_merge > 0.0:

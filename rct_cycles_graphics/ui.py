@@ -169,7 +169,9 @@ class RCT_PT_materials(bpy.types.Panel):
 def _tree_param_active(settings, name):
     """Whether a tree setting has an effect with the current choices."""
     style = settings.canopy_style
-    blobs = style not in ("TOPIARY", "NONE")
+    blobs = style not in ("TOPIARY", "NEEDLES", "NONE")
+    needles = style == "NEEDLES"
+    noisy = style not in ("NEEDLES", "NONE")
     conditions = {
         "large_width": settings.size == "LARGE",
         "large_length": settings.size == "LARGE",
@@ -186,11 +188,17 @@ def _tree_param_active(settings, name):
         "clump_flatten": blobs,
         "blob_merge": blobs,
         "droop": blobs,
-        "hollow": blobs and style != "COLUMN",
-        "lumpiness": style != "NONE",
-        "lump_scale": style != "NONE",
-        "raggedness": style != "NONE",
-        "resolution": style != "NONE",
+        "hollow": (blobs and style != "COLUMN") or needles,
+        "needle_length": needles,
+        "needle_width": needles,
+        "needle_spacing": needles,
+        "needle_angle": needles,
+        "needle_droop": needles,
+        "needle_rows": needles,
+        "lumpiness": noisy,
+        "lump_scale": noisy or settings.accent_mode == "TOP_FACING",
+        "raggedness": noisy,
+        "resolution": noisy,
         "accent_amount": settings.accent_mode != "NONE",
         "accent_size": settings.accent_mode == "DOTS",
         "accent_threshold": settings.accent_mode == "TOP_FACING",

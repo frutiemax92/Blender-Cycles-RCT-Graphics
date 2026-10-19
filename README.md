@@ -122,7 +122,7 @@ full design.
 | Trunk | Length (where the trunk ends), base and top radius, taper, root flare, sides |
 | Trunk Shape | Straightness, bend frequency, gnarl, lean and lean direction, twist, forks |
 | Branches | Count, start/end height, bottom/top angle, length and length profile, radius ratio, curve, spread (spiral, whorled, random), sub-branches, jitter |
-| Leaves | Style (blobs, layers, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, mesh resolution |
+| Leaves | Style (blobs, layers, needles, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, needle length/width/spacing/angle/droop/rows, mesh resolution |
 | Accent and Base | Dots (flowers, berries) or top-facing faces (snow); mound, pot or rocks base |
 
 **Materials.** The tree has four material slots: trunk, leaves, accent and

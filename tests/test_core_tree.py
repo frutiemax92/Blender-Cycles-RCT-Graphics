@@ -158,7 +158,7 @@ SIZES = [
 
 class BoundsTests(unittest.TestCase):
     def test_blobs_stay_inside_the_footprint_and_height(self):
-        for preset in ("BROADLEAF", "GNARLED_OAK", "CONIFER", "WEEPING", "CYPRESS", "LAYERED", "PALM", "SHRUB"):
+        for preset in ("BROADLEAF", "GNARLED_OAK", "WEEPING", "CYPRESS", "LAYERED", "SHRUB"):
             for size in SIZES:
                 params = tree.preset_params(preset, lean_angle=25.0, **size)
                 data = tree.generate(params)
@@ -180,6 +180,23 @@ class BoundsTests(unittest.TestCase):
             reach = np.hypot(leaves[:, 0] - data.anchor[0], leaves[:, 1] - data.anchor[1])
             self.assertLessEqual(reach.max(), limit + 1e-6, size)
             self.assertLessEqual(leaves[:, 2].max(), params.height + 1e-6)
+
+    def test_needles_stay_inside_the_footprint_and_height(self):
+        # A palm leaning 25 degrees has its crown outside the footprint: no needles.
+        for preset, lean in (("CONIFER", 25.0), ("SNOWY_CONIFER", 25.0), ("PALM", 10.0)):
+            for size in SIZES:
+                params = tree.preset_params(preset, lean_angle=lean, **size)
+                data, mesh = tree.build(params)
+                label = "{} {}".format(preset, size)
+                self.assertEqual(len(data.blobs), 0, label)
+                needles = mesh.verts[np.unique([i for f, m in zip(mesh.faces, mesh.material) if m != tree.TRUNK for i in f])]
+                self.assertGreater(len(needles), 0, label)
+                # The base corners may stick out by half a needle width.
+                limit = params.overhang * data.half_width + params.needle_width
+                reach = np.hypot(needles[:, 0] - data.anchor[0], needles[:, 1] - data.anchor[1])
+                self.assertLessEqual(reach.max(), limit + 1e-6, label)
+                self.assertLessEqual(needles[:, 2].max(), params.height + 1e-6, label)
+                self.assertGreaterEqual(needles[:, 2].min(), -1e-6, label)
 
     def test_large_tree_is_centred_on_its_footprint(self):
         data = tree.generate(tree.make_params(size="LARGE", large_width=3, large_length=2))
@@ -252,6 +269,24 @@ class MeshTests(unittest.TestCase):
             field = stiffness * (1.0 - 1.0 / factor**2) ** 3
             self.assertAlmostEqual(field, threshold)
         self.assertLess(tree.metaball_settings(0.1)[2], tree.metaball_settings(0.9)[2])
+
+    def test_needles_are_thin_upward_triangles(self):
+        params = tree.preset_params("CONIFER", needle_width=0.02)
+        data = tree.generate(params)
+        verts, faces = tree.needle_surface(data)
+        self.assertGreater(len(faces), 500)
+        self.assertTrue(all(len(f) == 3 for f in faces))
+        tris = verts[np.array(faces)]
+        np.testing.assert_allclose(np.linalg.norm(tris[:, 1] - tris[:, 0], axis=1), 0.02)
+        self.assertTrue((tree.face_normals(verts, faces)[:, 2] >= -1e-9).all())
+        self.assertLessEqual(np.linalg.norm(tris[:, 2] - tris[:, 0], axis=1).max(), params.needle_length * 1.25 + 0.02)
+
+    def test_needles_follow_spacing_and_hollow(self):
+        def count(**values):
+            return len(tree.needle_surface(tree.generate(tree.preset_params("CONIFER", **values)))[1])
+
+        self.assertGreater(count(needle_spacing=0.05), 3 * count(needle_spacing=0.2))
+        self.assertLess(count(hollow=0.6), 0.6 * count(hollow=0.0))
 
     def test_top_facing_share(self):
         verts, faces = tree.envelope_surface(tree.Envelope("ELLIPSOID", (0, 0), 2.0, 0.0, 4.0), 0.1)

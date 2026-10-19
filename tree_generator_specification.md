@@ -390,13 +390,16 @@ leader ends.
 ### 6.4 Canopy (leaves)
 
 The canopy is a set of **blobs** (centre, radius, flatten), later turned into
-a surface. `canopy_style` picks how blobs are placed:
+a surface, or for `NEEDLES` a set of thin planes. Blobs cannot be thinner
+than the metaball resolution, so needle-leaved trees use planes instead.
+`canopy_style` picks how the foliage is placed:
 
 | Style | Placement | Used by presets |
 |---|---|---|
 | `BLOBS` | `clumps_per_tip` blobs along the last 40 % of each tip branch, plus `clump_count` blobs sampled inside the envelope (Poisson-disc, min distance `0.6 * clump_size`). All blobs are clipped to the envelope | Broadleaf, Gnarled, Shrub, Blossom |
 | `LAYERS` | One flattened blob cluster per first-level branch tip (`clump_flatten` ≥ 0.5) | Layered |
-| `TIERS` | For conifers: per whorl, a ring of elongated, drooping blobs along each branch. Ring radius follows the cone envelope | Conifer, Snow |
+| `NEEDLES` | No blobs. Thin triangles in a fishbone along every branch: a pair every `needle_spacing`, `needle_rows` per side fanned 25° apart around `needle_droop`, angled `needle_angle` towards the tip, `needle_width` wide at the base. Longest a quarter of the way along, shrinking to the tip; the first `hollow` of each branch is bare. The stem above the highest branch gets needles all around. Needles are cut at the envelope radius and kept between the ground and the tree height; faces point up so `TOP_FACING` snow works. No noise displacement | Conifer, Snowy Conifer, Palm |
+| `TIERS` | Per whorl, a ring of elongated, drooping blobs along each branch. Ring radius follows the cone envelope | — |
 | `COLUMN` | Blobs stacked along the trunk axis, radius following the envelope profile, high `raggedness` | Columnar |
 | `TOPIARY` | No blobs. The envelope shape itself is the canopy surface, with low lumpiness | Topiary |
 | `STRANDS` | Chains of small blobs hanging from each tip, length `droop * height` | Weeping |
@@ -494,7 +497,7 @@ material colours.
 | Birch | Broadleaf with thin pale trunk (`trunk_base_radius 0.1`), `canopy_shape ELLIPSOID`, light leaves | `176.png` |
 | Gnarled Oak | `straightness 0.4`, `gnarl 0.6`, `fork_count 2`, `trunk_base_radius 0.3`, `lumpiness 0.5`, `hollow 0.3` | `11.png`, `1050.png` |
 | Layered | `trunk_length 0.8`, `branch_count 5`, `canopy_style LAYERS`, `clump_flatten 0.6`, `hollow 0.4` | `1051.png`, `1053.png` |
-| Conifer | `height 11`, `trunk_length 1.0`, `branch_spread WHORLED`, `branch_count 24`, `branch_length_profile CONICAL`, `branch_curve -0.4`, `canopy_style TIERS`, `canopy_shape CONE` | `146.png`, `147.png` |
+| Conifer | `height 11`, `trunk_length 1.0`, `branch_spread WHORLED`, `branch_count 24`, `branch_length_profile CONICAL`, `branch_curve -0.4`, `canopy_style NEEDLES`, `canopy_shape CONE`, `needle_rows 3` | `146.png`, `147.png` |
 | Snowy Conifer | Conifer + `accent_mode TOP_FACING`, white accent | `182.png`, `185.png` |
 | Cypress | `height 9`, `trunk_length 0.1`, `canopy_style COLUMN`, `canopy_width 0.35`, `raggedness 0.6` | `116.png`, `122.png` |
 | Shrub | `height 2.5`, `trunk_length 0`, `branch_count 0`, `clump_count 25`, `canopy_shape ELLIPSOID` | `101.png`, `129.png` |
@@ -502,7 +505,7 @@ material colours.
 | Topiary Ball / Cone / Heart | `trunk_length 0.4`, thick trunk, `canopy_style TOPIARY`, matching `canopy_shape`, `lumpiness 0.05`, bright leaves | `134.png`, `135.png`, `109.png` |
 | Weeping | `branch_angle_top 70`, `branch_curve -0.6`, `canopy_style STRANDS`, `droop 0.6` | `130.png`, `199.png` |
 | Blossom | Broadleaf, `straightness 0.5`, `accent_mode DOTS`, `accent_amount 0.5`, accent on remap 1 | `123.png` |
-| Palm | `trunk_length 0.9`, `straightness 0.6`, `lean_angle 10`, `branch_count 8` from the very top (`branch_start 0.98`), `branch_curve -0.7`, `canopy_style STRANDS` with flattened blobs | Tropical theme |
+| Palm | `trunk_length 0.9`, `straightness 0.6`, `lean_angle 10`, `branch_count 8` from the very top (`branch_start 0.98`), `branch_curve -0.7`, `canopy_style NEEDLES` (one row of long leaflets per frond) | Tropical theme |
 | Bare | `canopy_style NONE`, `sub_branches 3` | Dead tree |
 
 The tests check every preset (section 10). The table is a starting point;

@@ -369,16 +369,17 @@ class LeafInstanceTests(unittest.TestCase):
         self.assertAlmostEqual(np.ptp(wide[:, 1]) / np.ptp(narrow[:, 1]), 5.0)
 
     def test_rosette(self):
-        verts, faces = tree.leaf_template("ROSETTE", 0.15)
-        spikes = sum(count for count, _, _ in tree.ROSETTE_RINGS)
-        self.assertEqual(len(faces), 2 * spikes)
-        # Every spike opens forwards from the end of the stem, all around it.
+        verts, faces = tree.leaf_template("ROSETTE", 0.25)
+        petals = sum(count for count, _, _ in tree.ROSETTE_RINGS)
+        size = 2 + 2 * len(tree.ROSETTE_PETAL)
+        self.assertEqual(len(verts), size * petals)
+        # Every petal opens forwards from the end of the stem, all around it.
         self.assertTrue((tree.face_normals(verts, faces)[:, 0] > 0.5).all())
-        tips = verts[2::4]
+        tips = verts[size - 1 :: size]
         angles = np.sort(np.arctan2(tips[:, 2], tips[:, 1]))
         self.assertLess(np.diff(np.concatenate([angles, angles[:1] + 2 * math.pi])).max(), math.radians(60.0))
         along = tree.leaf_along(verts)
-        self.assertLess(along[0::4].max(), 0.2)
+        self.assertLess(along[0::size].max(), 0.2)
         self.assertAlmostEqual(along.max(), 1.0)
         data, mesh = tree.build(tree.preset_params("ROSETTE_BROADLEAF"))
         self.assertEqual(mesh.material.count(tree.LEAVES), len(data.strands) * len(faces))

@@ -135,7 +135,7 @@ LEAF_SHAPES = _enum(
     ("BLADE", "Blade", "A narrow, pointed leaf folded along its midrib"),
     ("OVAL", "Oval", "A broad, rounded leaf"),
     ("SPRIG", "Sprig", "Three blades fanned from one stem"),
-    ("ROSETTE", "Rosette", "Two rings of thin spikes radiating from a short stem, like a green flower head"),
+    ("ROSETTE", "Rosette", "Two rings of broad petals radiating from a short stem, like a green flower head"),
     ("CUSTOM", "Custom Object", "The mesh of the Leaf Object: its root at the origin, growing along +X, upper face towards +Z"),
 )
 BASE_STYLES = _enum(
@@ -773,13 +773,16 @@ PRESETS = {
             "height": 7.8,
             "canopy_style": "INSTANCES",
             "canopy_height": 0.55,
-            # Fewer, larger leaves: each rosette is a starburst of
-            # one-pixel spikes around a darker centre.
-            "hair_count": 500,
-            "hair_length": 1.0,
-            "hair_spread": 20.0,
+            # Few, large leaves: each rosette is a green flower head of
+            # broad petals around a darker centre, about 20 pixels across.
+            "hair_count": 200,
+            "hair_length": 1.8,
+            # Rosettes of very different sizes, loosely aimed, so the
+            # crown's outline stays lumpy instead of a smooth ball.
+            "hair_length_variation": 0.7,
+            "hair_spread": 60.0,
             "leaf_shape": "ROSETTE",
-            "leaf_width": 0.15,
+            "leaf_width": 0.25,
             "leaf_fold": 0.0,
             "leaf_bend": 15.0,
             "leaf_irregularity": 0.3,
@@ -2356,11 +2359,15 @@ ROSETTE_RINGS = ((9, 15.0, 1.0), (7, 50.0, 0.7))
 ROSETTE_STEM = 0.12
 
 
-def _rosette(width):
-    """Thin diamond spikes radiating from the end of a short stem, opening along +X: (verts, faces).
+#: Petal outline of the rosette: (position along the petal, half-width over the widest).
+ROSETTE_PETAL = ((0.3, 1.0), (0.7, 0.8))
 
-    Spike lengths and angles vary slightly (but always the same way) so the
-    star is not perfectly regular; every face points forwards (+X).
+
+def _rosette(width):
+    """Broad, round-tipped petals radiating from the end of a short stem, opening along +X: (verts, faces).
+
+    Petal lengths and angles vary slightly (but always the same way) so the
+    rosette is not perfectly regular; every face points forwards (+X).
     """
     centre = np.array([ROSETTE_STEM, 0.0, 0.0])
     verts, faces = [], []
@@ -2374,8 +2381,13 @@ def _rosette(width):
             tangent = np.array([0.0, -math.sin(azimuth), math.cos(azimuth)])
             side = tangent * width * reach / 2.0
             base = len(verts)
-            verts += [centre, centre + direction * 0.35 * reach - side, centre + direction * reach, centre + direction * 0.35 * reach + side]
-            faces += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
+            # Centre, then each station's two edges, then the tip.
+            verts.append(centre)
+            for t, half in ROSETTE_PETAL:
+                verts += [centre + direction * t * reach - side * half, centre + direction * t * reach + side * half]
+            verts.append(centre + direction * reach)
+            a, b, c, d, tip = base + 1, base + 2, base + 3, base + 4, base + 5
+            faces += [(base, a, b), (a, c, d), (a, d, b), (c, tip, d)]
     verts = np.array(verts)
     return verts / np.linalg.norm(verts, axis=1).max(), faces
 

@@ -170,8 +170,8 @@ exactly. The leaves sit where hair strands would grow: the *Grow From*,
 count, size, angle, flatten and droop settings are shared with the Hair
 style (the panel renames them *Leaves*, *Leaf Size*, and so on). *Leaf
 Shape* picks a narrow blade, an oval leaf, a sprig of three blades, a
-rosette (two rings of thin spikes around a darker centre, like a green
-flower head, facing outwards along its stem), or a **Custom Object**. A
+rosette (two rings of broad, round-tipped petals around a darker centre,
+like a green flower head, facing outwards along its stem), or a **Custom Object**. A
 custom *Leaf Object* is read in its own axes: root at the origin, growing
 along +X, upper face towards +Z. It is scaled so its farthest vertex is 1
 from the origin, and its modifiers apply. **Make Leaf Object** copies the
@@ -184,8 +184,8 @@ width and bend and jitters its vertices. *Face Up* turns the upper faces
 towards the sky. The leaves material shades each leaf like a strand, from
 Colour A at the root to Colour B at the tip, with its own brightness.
 Leafy Broadleaf uses about 3,000 long, narrow blades in the Hair Broadleaf
-crown. Rosette Broadleaf uses 500 larger rosettes, for a texture of small
-starbursts.
+crown. Rosette Broadleaf uses 200 large rosettes of very different sizes, each up
+to about 20 pixels across, so the crown's outline stays lumpy.
 
 **Apply (Freeze Mesh)** turns the tree into a plain mesh for manual editing.
 Until then, regenerating replaces manual mesh edits.

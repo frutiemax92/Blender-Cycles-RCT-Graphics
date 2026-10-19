@@ -141,6 +141,12 @@ Why a single object:
   `material_index` from its role.
 - The user can still select faces by material slot to inspect a part.
 
+The `HAIR` canopy style (6.4) is the one exception: its strands are particle
+hair on a child object, `RCT Tree Hair`, parented to the tree with the
+leaves material in its slot. The child is not selectable and its emitter
+mesh never renders; it is rebuilt with the tree and deleted when another
+style is picked.
+
 Regenerating **replaces the mesh data** (`obj.data`) only. Object transform,
 modifiers added by the user, material slot assignments and custom
 properties are kept. Manual mesh edits are lost on regeneration; the panel
@@ -390,8 +396,9 @@ leader ends.
 ### 6.4 Canopy (leaves)
 
 The canopy is a set of **blobs** (centre, radius, flatten), later turned into
-a surface, or for `NEEDLES` a set of thin planes. Blobs cannot be thinner
-than the metaball resolution, so needle-leaved trees use planes instead.
+a surface, for `NEEDLES` a set of thin planes, or for `HAIR` a set of
+straight strands. Blobs cannot be thinner than the metaball resolution, so
+needle-leaved trees use planes instead, and fine bushy fronds use hair.
 `canopy_style` picks how the foliage is placed:
 
 | Style | Placement | Used by presets |
@@ -399,6 +406,7 @@ than the metaball resolution, so needle-leaved trees use planes instead.
 | `BLOBS` | `clumps_per_tip` blobs along the last 40 % of each tip branch, plus `clump_count` blobs sampled inside the envelope (Poisson-disc, min distance `0.6 * clump_size`). All blobs are clipped to the envelope | Broadleaf, Gnarled, Shrub, Blossom |
 | `LAYERS` | One flattened blob cluster per first-level branch tip (`clump_flatten` ≥ 0.5) | Layered |
 | `NEEDLES` | No blobs. Thin triangles in a fishbone along every branch: a pair every `needle_spacing`, `needle_rows` per side fanned 25° apart around `needle_droop`, angled `needle_angle` towards the tip, `needle_width` wide at the base. Longest a quarter of the way along, shrinking to the tip; the first `hollow` of each branch is bare. The stem above the highest branch gets needles all around. Needles are cut at the envelope radius and kept between the ground and the tree height; faces point up so `TOP_FACING` snow works. No noise displacement | Conifer, Snowy Conifer, Palm |
+| `HAIR` | No blobs and no canopy mesh. `hair_count` straight strands (`Strands`: roots, directions, lengths), rendered with Blender's particle hair. `hair_source`: `BRANCHES` spreads them along every branch past its bare `hollow` start, `hair_spread` from the branch and rolled around it (`hair_flatten` 1 keeps them level on both sides, a frond), shortening by half towards the tip; without branches the stems inside the envelope are used. `TIPS` puts tufts at every tip, uniform within a `hair_spread` cone around the tip direction. `CANOPY` samples the envelope surface, within `hair_spread` of its normal. Each strand then tilts `hair_droop` towards the ground, loses up to `hair_length_variation` of its length, and is cut at the overhang radius and between the ground and the tree height (dropped below a quarter of its length). `DOTS` accents sit on the tips of `accent_amount` of the strands; `TOP_FACING` has no effect | Hair Palm |
 | `TIERS` | Per whorl, a ring of elongated, drooping blobs along each branch. Ring radius follows the cone envelope | — |
 | `COLUMN` | Blobs stacked along the trunk axis, radius following the envelope profile, high `raggedness` | Columnar |
 | `TOPIARY` | No blobs. The envelope shape itself is the canopy surface, with low lumpiness | Topiary |
@@ -457,6 +465,15 @@ below `hollow * envelope_radius`. `droop` moves each blob centre down by
    materials are created (5.2).
 6. The result replaces `obj.data`. The old mesh datablock is removed if no
    other object uses it.
+7. **Hair.** For `HAIR`, the child object's mesh gets one tiny triangle
+   (0.01 BU) per strand, centred on its root and facing along it, and a
+   `Length` vertex group holding each strand's length over the longest.
+   Its hair particle system emits one particle per face (`FACE`, no random
+   emission, even distribution), so every strand grows along its triangle's
+   normal; `hair_length` is the longest strand and the vertex group scales
+   the others (linear from 5 hair segments on). Strand width maps to
+   `radius_scale` and `tip_radius`; children are `SIMPLE` children with
+   `hair_child_radius`, `hair_clump` and `hair_roughness` (end point).
 
 ### 6.7 Footprint and size limits
 
@@ -506,6 +523,7 @@ material colours.
 | Weeping | `branch_angle_top 70`, `branch_curve -0.6`, `canopy_style STRANDS`, `droop 0.6` | `130.png`, `199.png` |
 | Blossom | Broadleaf, `straightness 0.5`, `accent_mode DOTS`, `accent_amount 0.5`, accent on remap 1 | `123.png` |
 | Palm | `trunk_length 0.9`, `straightness 0.6`, `lean_angle 10`, `branch_count 8` from the very top (`branch_start 0.98`), `branch_curve -0.7`, `canopy_style NEEDLES` (one row of long leaflets per frond) | Tropical theme |
+| Hair Palm | `trunk_length 0.65`, `branch_count 14` near the top, `branch_curve -0.5`, `canopy_style HAIR` from `BRANCHES`, `hair_count 1200`, `hair_droop 45`, `hair_children 2` | `28.png` |
 | Bare | `canopy_style NONE`, `sub_branches 3` | Dead tree |
 
 The tests check every preset (section 10). The table is a starting point;

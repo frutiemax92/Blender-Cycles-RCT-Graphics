@@ -209,6 +209,86 @@ class BoundsTests(unittest.TestCase):
         self.assertFalse(tree.generate(tree.make_params(height=14.0, size="LARGE")).warnings())
 
 
+class HairTests(unittest.TestCase):
+    def hair(self, **values):
+        return tree.build(tree.preset_params("HAIR_PALM", **values))
+
+    def test_strands_stay_inside_the_footprint_and_height(self):
+        for source in ("BRANCHES", "TIPS", "CANOPY"):
+            for size in SIZES:
+                data, _ = self.hair(hair_source=source, hair_spread=120.0, hair_droop=-20.0, **size)
+                params, strands = data.params, data.strands
+                label = "{} {}".format(source, size)
+                self.assertGreater(len(strands), 0.5 * params.hair_count, label)
+                points = np.concatenate([strands.roots, strands.tips])
+                reach = np.hypot(points[:, 0] - data.anchor[0], points[:, 1] - data.anchor[1])
+                self.assertLessEqual(reach.max(), params.overhang * data.half_width + 1e-6, label)
+                self.assertLessEqual(points[:, 2].max(), params.height + 1e-6, label)
+                self.assertGreaterEqual(points[:, 2].min(), -1e-6, label)
+                self.assertLessEqual(strands.lengths.max(), params.hair_length + 1e-9, label)
+                np.testing.assert_allclose(np.linalg.norm(strands.directions, axis=1), 1.0)
+
+    def test_count_and_determinism(self):
+        data_a, mesh_a = self.hair(hair_source="TIPS", hair_count=300)
+        data_b, mesh_b = self.hair(hair_source="TIPS", hair_count=300)
+        self.assertEqual(len(data_a.strands), 300)
+        np.testing.assert_array_equal(data_a.strands.tips, data_b.strands.tips)
+        data_c, _ = self.hair(hair_source="TIPS", hair_count=300, seed=2)
+        self.assertFalse(np.allclose(data_a.strands.directions, data_c.strands.directions))
+        # Changing the strands never reshuffles the skeleton.
+        data_d, _ = self.hair(hair_source="TIPS", hair_count=50, hair_spread=10.0)
+        np.testing.assert_array_equal(data_a.polylines[1].points, data_d.polylines[1].points)
+
+    def test_spread_and_droop(self):
+        data, _ = self.hair(hair_source="TIPS", hair_spread=20.0, hair_droop=0.0, jitter=0.0)
+        directions = np.array([t.direction for t in data.tips])
+        # Every strand is within 20 degrees of some tip direction.
+        cosines = (data.strands.directions @ directions.T).max(axis=1)
+        self.assertGreaterEqual(cosines.min(), math.cos(math.radians(20.0)) - 1e-9)
+        low, _ = self.hair(hair_droop=60.0)
+        high, _ = self.hair(hair_droop=0.0)
+        self.assertLess(low.strands.directions[:, 2].mean(), high.strands.directions[:, 2].mean() - 0.3)
+
+    def test_flatten_keeps_strands_beside_the_branch(self):
+        data, _ = self.hair(hair_flatten=1.0, hair_droop=0.0, jitter=0.0, hair_spread=90.0)
+        # Level with the branch: perpendicular strands are horizontal when the branch is.
+        self.assertLess(np.abs(data.strands.directions[:, 2]).mean(), 0.6)
+        round_, _ = self.hair(hair_flatten=0.0, hair_droop=0.0, jitter=0.0, hair_spread=90.0)
+        self.assertGreater(np.abs(round_.strands.directions[:, 2]).mean(), np.abs(data.strands.directions[:, 2]).mean())
+
+    def test_hollow_moves_strands_to_the_branch_ends(self):
+        def mean_reach(hollow):
+            data, _ = self.hair(hollow=hollow)
+            roots = data.strands.roots
+            return np.hypot(roots[:, 0] - data.anchor[0], roots[:, 1] - data.anchor[1]).mean()
+
+        self.assertGreater(mean_reach(0.6), mean_reach(0.0) + 0.2)
+
+    def test_emitter_faces_point_along_the_strands(self):
+        data, _ = self.hair()
+        verts, faces, weights = tree.hair_emitter(data.strands)
+        self.assertEqual(len(faces), len(data.strands))
+        np.testing.assert_allclose(tree.face_normals(verts, faces), data.strands.directions, atol=1e-9)
+        tris = verts[np.array(faces)]
+        np.testing.assert_allclose(tris.mean(axis=1), data.strands.roots, atol=1e-9)
+        np.testing.assert_allclose(np.linalg.norm(tris[:, 1] - tris[:, 0], axis=1), tree.HAIR_CARD_SIZE)
+        np.testing.assert_allclose(weights[::3] * data.strands.lengths.max(), data.strands.lengths)
+        self.assertAlmostEqual(weights.max(), 1.0)
+
+    def test_hair_has_no_canopy_mesh_but_accent_dots_on_the_tips(self):
+        data, mesh = self.hair()
+        self.assertNotIn(tree.LEAVES, set(mesh.material))
+        data, mesh = self.hair(accent_mode="DOTS", accent_amount=0.1)
+        accents = [f for f, m in zip(mesh.faces, mesh.material) if m == tree.ACCENT]
+        self.assertEqual(len(accents), len(tree.icosphere(1)[1]) * round(0.1 * len(data.strands)))
+        self.assertEqual(len(tree.hair_strands(tree.generate(tree.preset_params("BROADLEAF")))), 0)
+
+    def test_no_strands_without_count(self):
+        data, _ = self.hair(hair_count=0)
+        self.assertEqual(len(data.strands), 0)
+        self.assertEqual(len(tree.hair_emitter(data.strands)[1]), 0)
+
+
 class PresetTests(unittest.TestCase):
     def test_every_preset_builds(self):
         for name, preset in tree.PRESETS.items():
@@ -217,7 +297,9 @@ class PresetTests(unittest.TestCase):
             roles = set(mesh.material)
             if params.trunk_length > 0:
                 self.assertIn(tree.TRUNK, roles, name)
-            if params.canopy_style != "NONE":
+            if params.canopy_style == "HAIR":
+                self.assertGreater(len(data.strands), 0, name)
+            elif params.canopy_style != "NONE":
                 self.assertIn(tree.LEAVES, roles, name)
             if params.accent_mode != "NONE":
                 self.assertIn(tree.ACCENT, roles, name)

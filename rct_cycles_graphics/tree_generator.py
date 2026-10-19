@@ -3,7 +3,8 @@
 The geometry comes from ``core/tree.py``. This module turns it into one mesh
 object with four material slots (trunk, leaves, accent, base), merges canopy
 blobs with a temporary metaball, and keeps the scene's object type in step
-with the tree's footprint.
+with the tree's footprint. The hair canopy style adds a child object whose
+hidden emitter mesh grows the strands as particle hair.
 """
 
 import math
@@ -20,6 +21,11 @@ from .core import projection, tree
 from .properties import flag_property
 
 TREE_NAME = "RCT Tree"
+HAIR_NAME = "RCT Tree Hair"
+#: Vertex group scaling each strand's length.
+HAIR_LENGTH_GROUP = "Length"
+#: Hair segments; from 5 on, the length vertex group scales strands linearly.
+HAIR_STEPS = 5
 #: Base name of the temporary metaball. Metaballs sharing a base name fuse,
 #: so it must not match anything a user would create.
 METABALL_NAME = "RCT_TreeCanopyTemp"
@@ -368,6 +374,19 @@ def assign_slots(obj):
         material = role_material(obj.rct_tree, role)
         if mesh.materials[role] != material:
             mesh.materials[role] = material
+    _assign_hair_material(obj.rct_tree)
+
+
+def _assign_hair_material(settings):
+    hair = settings.hair_object
+    if hair is None or hair.type != "MESH":
+        return
+    materials_ = hair.data.materials
+    leaves = role_material(settings, tree.LEAVES)
+    if len(materials_) == 0:
+        materials_.append(leaves)
+    elif materials_[0] != leaves:
+        materials_[0] = leaves
 
 
 def make_unique(settings):
@@ -451,6 +470,108 @@ def write_mesh(name, data):
     return mesh
 
 
+# Hair --------------------------------------------------------------------------------
+
+
+def remove_hair(settings):
+    """Delete the tree's hair object with its mesh and particle settings."""
+    hair = settings.hair_object
+    if hair is None:
+        return
+    settings.hair_object = None
+    mesh = hair.data
+    particle_settings = [m.particle_system.settings for m in hair.modifiers if m.type == "PARTICLE_SYSTEM"]
+    bpy.data.objects.remove(hair, do_unlink=True)
+    if mesh is not None and mesh.users == 0:
+        bpy.data.meshes.remove(mesh)
+    for item in particle_settings:
+        if item is not None and item.users == 0:
+            bpy.data.particles.remove(item)
+
+
+def _hair_object(obj):
+    """The tree's hair object, created (or re-linked) when missing."""
+    settings = obj.rct_tree
+    hair = settings.hair_object
+    if hair is not None and hair.parent != obj:
+        # Shared with the tree this one was duplicated from: leave it to that tree.
+        hair = None
+    if hair is None:
+        hair = bpy.data.objects.new(HAIR_NAME, bpy.data.meshes.new(HAIR_NAME))
+        hair.parent = obj
+        # Clicks select the tree; the emitter triangles never render.
+        hair.hide_select = True
+        hair.show_instancer_for_render = False
+        hair.show_instancer_for_viewport = False
+        modifier = hair.modifiers.new("Hair", "PARTICLE_SYSTEM")
+        modifier.particle_system.settings.name = HAIR_NAME
+        settings.hair_object = hair
+    if not hair.users_collection:
+        for collection in obj.users_collection or (bpy.context.scene.collection,):
+            collection.objects.link(hair)
+    return hair
+
+
+def _configure_hair(psys, params, strands):
+    psys.seed = params.seed
+    psys.vertex_group_length = HAIR_LENGTH_GROUP
+    hair = psys.settings
+    hair.type = "HAIR"
+    hair.use_advanced_hair = False
+    # One strand per emitter triangle, along its normal.
+    hair.count = len(strands)
+    hair.emit_from = "FACE"
+    hair.distribution = "JIT"
+    hair.use_emit_random = False
+    hair.use_even_distribution = True
+    hair.tangent_factor = 0.0
+    hair.object_align_factor = (0.0, 0.0, 0.0)
+    hair.factor_random = 0.0
+    hair.normal_factor = 1.0
+    # Hair length rescales the normal factor, so it comes after it.
+    hair.hair_length = float(strands.lengths.max())
+    hair.hair_step = HAIR_STEPS
+    hair.display_step = 3
+    hair.render_step = 3
+    hair.material = 1
+    hair.root_radius = 1.0
+    hair.tip_radius = params.hair_tip_width
+    hair.radius_scale = params.hair_width
+    children = params.hair_children
+    hair.child_type = "SIMPLE" if children > 0 else "NONE"
+    hair.child_percent = children
+    hair.rendered_child_count = children
+    hair.child_radius = params.hair_child_radius
+    hair.clump_factor = params.hair_clump
+    hair.roughness_endpoint = params.hair_roughness
+
+
+def sync_hair(obj, params, strands):
+    """Create, update or remove the hair object of the tree ``obj``."""
+    settings = obj.rct_tree
+    if params.canopy_style != "HAIR" or len(strands) == 0:
+        remove_hair(settings)
+        return
+    hair = _hair_object(obj)
+    verts, faces, weights = tree.hair_emitter(strands)
+    old = hair.data
+    hair.data = write_mesh(HAIR_NAME, tree.MeshData(verts, faces, 0, False))
+    if old is not None and old.users == 0:
+        bpy.data.meshes.remove(old)
+    _assign_hair_material(settings)
+    group = hair.vertex_groups.get(HAIR_LENGTH_GROUP) or hair.vertex_groups.new(name=HAIR_LENGTH_GROUP)
+    # One call per distinct weight; a thousand steps is finer than a pixel.
+    levels = np.round(weights * 1000.0).astype(np.int64)
+    order = np.argsort(levels, kind="stable")
+    values, starts = np.unique(levels[order], return_index=True)
+    for value, indices in zip(values.tolist(), np.split(order, starts[1:])):
+        group.add(indices.tolist(), value / 1000.0, "REPLACE")
+    modifier = next((m for m in hair.modifiers if m.type == "PARTICLE_SYSTEM"), None)
+    if modifier is None:
+        modifier = hair.modifiers.new("Hair", "PARTICLE_SYSTEM")
+    _configure_hair(modifier.particle_system, params, strands)
+
+
 def _footprint_box(settings):
     half = projection.TILE_SIZE / 2.0
     if settings.size == "LARGE":
@@ -475,16 +596,24 @@ def regenerate(obj):
 
     old = obj.data
     obj.data = write_mesh(TREE_NAME, mesh_data)
-    assign_slots(obj)
     if old is not None and old.users == 0:
         bpy.data.meshes.remove(old)
+    sync_hair(obj, params, data.strands)
+    assign_slots(obj)
 
     warnings = data.warnings()
     faces = len(mesh_data.faces)
     if faces > tree.FACE_WARNING:
         warnings.append("{} faces: lower the resolution or clump count".format(faces))
+    if params.canopy_style == "HAIR" and len(data.strands) == 0:
+        warnings.append("No hair strands: they need branches inside the footprint")
+    if params.canopy_style == "HAIR" and params.accent_mode == "TOP_FACING":
+        warnings.append(tree.NOTE + "Top Facing accent has no effect on hair; Dots go on the strand tips")
     settings.stat_faces = faces
+    settings.stat_strands = len(data.strands) * (1 + params.hair_children)
     verts = mesh_data.verts
+    if len(data.strands):
+        verts = np.concatenate([verts, data.strands.tips])
     if len(verts):
         settings.stat_top = float(verts[:, 2].max())
         lo, hi = _footprint_box(settings)
@@ -614,6 +743,8 @@ class TreeSettings(bpy.types.PropertyGroup):
     stat_faces: IntProperty(default=0, options={"HIDDEN"})
     stat_top: FloatProperty(default=0.0, options={"HIDDEN"})
     stat_fits: BoolProperty(default=True, options={"HIDDEN"})
+    stat_strands: IntProperty(default=0, options={"HIDDEN"})
+    hair_object: PointerProperty(type=bpy.types.Object, name="Hair Object", options={"HIDDEN"})
 
 
 for _param in tree.PARAMETERS:

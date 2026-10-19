@@ -7,11 +7,13 @@ changing one stage's settings never reshuffles another:
    first-level branches and optional sub-branches.
 2. A **canopy** of blobs (ellipsoids) placed from the branch tips and a
    canopy envelope, according to the canopy style. The needle style uses
-   no blobs: thin triangles hang from the branches instead.
+   no blobs: thin triangles hang from the branches instead. The hair style
+   uses straight strands that the Blender side renders as particle hair.
 3. **Mesh data**: tubes for the trunk and branches, the canopy surface
    (icospheres here, or a metaball surface supplied by the Blender side;
    needles for the needle style),
    noise displacement, accent dots or snow faces, and an optional base.
+   Hair strands are returned on the side, as roots, directions and lengths.
 
 Units are Blender units (BU), angles in the parameter table are degrees.
 The tile is centred on the origin and z = 0 is the element base, as in the
@@ -85,6 +87,7 @@ CANOPY_STYLES = _enum(
     ("BLOBS", "Blobs", "Clumps at the branch tips plus clumps scattered in the envelope"),
     ("LAYERS", "Layers", "One flattened cluster per branch tip"),
     ("NEEDLES", "Needles", "Thin needle planes in a fishbone along each branch (pines)"),
+    ("HAIR", "Hair", "Straight strands rendered with Blender's hair particles (fine palm fronds, grasses)"),
     ("TIERS", "Tiers", "Elongated, drooping clumps along each branch"),
     ("COLUMN", "Column", "Clumps stacked along the trunk (cypress)"),
     ("TOPIARY", "Topiary", "The envelope itself is the canopy surface"),
@@ -114,6 +117,11 @@ ACCENT_MODES = _enum(
     ("NONE", "None", "No accent"),
     ("DOTS", "Dots", "Small spheres on the canopy (flowers, berries)"),
     ("TOP_FACING", "Top Facing", "Upward-facing canopy faces use the accent material (snow)"),
+)
+HAIR_SOURCES = _enum(
+    ("BRANCHES", "Branches", "Along each branch past its bare start, like fronds"),
+    ("TIPS", "Branch Tips", "Tufts at the end of each branch and stem"),
+    ("CANOPY", "Canopy Surface", "Out of the canopy shape's surface"),
 )
 BASE_STYLES = _enum(
     ("NONE", "None", "No base"),
@@ -263,6 +271,34 @@ GROUPS = (
             Param("needle_angle", 50.0, "Needle Angle", "Angle of the needles from their branch, towards its tip", (10.0, 90.0), (0.0, 90.0), "deg"),
             Param("needle_droop", 30.0, "Needle Droop", "How far the needles hang below their branch", (0.0, 80.0), (-60.0, 89.0), "deg"),
             Param("needle_rows", 2, "Needle Rows", "Needles on each side of a branch, fanned from above to below it", (1, 4), (1, 8)),
+            Param("hair_source", "BRANCHES", "Grow From", "Where the hair strands start", items=HAIR_SOURCES),
+            Param("hair_count", 600, "Strands", "Number of hair strands (particles)", (10, 4000), (1, 100000)),
+            Param("hair_length", 0.7, "Strand Length", "Length of the longest strands", (0.05, 3.0), (0.01, 20.0), "bu"),
+            Param("hair_length_variation", 0.3, "Length Variation", "Random shortening of each strand", (0.0, 1.0), (0.0, 1.0)),
+            Param(
+                "hair_spread",
+                60.0,
+                "Strand Angle",
+                "Angle of the strands from their branch; at tips and on the canopy surface, the widest angle from the outward direction",
+                (0.0, 180.0),
+                (0.0, 180.0),
+                "deg",
+            ),
+            Param(
+                "hair_flatten",
+                0.5,
+                "Flatten",
+                "Along branches: 1 keeps the strands to both sides of the branch (a frond), 0 spreads them all around it",
+                (0.0, 1.0),
+                (0.0, 1.0),
+            ),
+            Param("hair_droop", 30.0, "Strand Droop", "Tilts the strands towards the ground (negative lifts them)", (0.0, 90.0), (-90.0, 90.0), "deg"),
+            Param("hair_width", 0.06, "Strand Width", "Strand width at its root; one sprite pixel is about 0.09", (0.01, 0.3), (0.001, 2.0), "bu"),
+            Param("hair_tip_width", 0.2, "Tip Width", "Strand width at its tip, relative to the root", (0.0, 1.0), (0.0, 1.0)),
+            Param("hair_children", 0, "Children", "Extra strands rendered around each strand", (0, 20), (0, 1000)),
+            Param("hair_child_radius", 0.08, "Child Spread", "How far the children grow from their strand", (0.0, 0.5), (0.0, 5.0), "bu"),
+            Param("hair_clump", 0.0, "Clump", "Pulls the children's tips to their strand (negative spreads them)", (-1.0, 1.0), (-1.0, 1.0)),
+            Param("hair_roughness", 0.0, "Roughness", "Random offset of the children's tips", (0.0, 0.5), (0.0, 5.0), "bu"),
             Param(
                 "resolution",
                 0.12,
@@ -595,6 +631,44 @@ PRESETS = {
             "needle_rows": 1,
         },
         colours={"trunk": (srgb(120, 92, 60), srgb(150, 124, 90)), "leaves": (srgb(30, 80, 30), srgb(100, 160, 60))},
+    ),
+    "HAIR_PALM": _preset(
+        "Hair Palm",
+        {
+            "height": 6.5,
+            "overhang": 1.1,
+            "trunk_length": 0.65,
+            "trunk_base_radius": 0.2,
+            "trunk_top_radius": 0.14,
+            "root_flare": 0.2,
+            "straightness": 0.8,
+            "branch_count": 14,
+            "branch_start": 0.85,
+            "branch_end": 1.0,
+            "branch_angle_base": 80.0,
+            "branch_angle_top": 25.0,
+            "branch_length": 0.3,
+            "branch_length_profile": "CONSTANT",
+            "branch_curve": -0.5,
+            "branch_radius_ratio": 0.2,
+            "canopy_style": "HAIR",
+            "canopy_shape": "ELLIPSOID",
+            "canopy_width": 1.1,
+            "canopy_height": 0.55,
+            "hollow": 0.1,
+            "hair_source": "BRANCHES",
+            "hair_count": 1200,
+            "hair_length": 0.85,
+            "hair_length_variation": 0.35,
+            "hair_spread": 55.0,
+            "hair_flatten": 0.4,
+            "hair_droop": 45.0,
+            "hair_width": 0.07,
+            "hair_tip_width": 0.3,
+            "hair_children": 2,
+            "hair_child_radius": 0.08,
+        },
+        colours={"trunk": (srgb(110, 70, 30), srgb(170, 110, 50)), "leaves": (srgb(20, 70, 40), srgb(90, 150, 90))},
     ),
     "BARE": _preset(
         "Bare",
@@ -939,8 +1013,8 @@ def build_branches(params, skeleton, envelope, rng):
     jitter = params.jitter
     start, end = sorted((params.branch_start, params.branch_end))
     height = params.height
-    # Clumps may hang over the envelope; needles grow outwards from the branch.
-    clump = 0.0 if params.canopy_style == "NEEDLES" else params.clump_size
+    # Clumps may hang over the envelope; needles and hair grow outwards from the branch.
+    clump = 0.0 if params.canopy_style in ("NEEDLES", "HAIR") else params.clump_size
 
     def inside(point):
         return point[2] <= height and envelope.sdf(point)[0] <= clump
@@ -1317,7 +1391,7 @@ def _strand_blobs(params, skeleton, tips, rng):
 
 def place_blobs(params, skeleton, tips, envelope, rng):
     style = params.canopy_style
-    if style in ("NONE", "TOPIARY", "NEEDLES"):
+    if style in ("NONE", "TOPIARY", "NEEDLES", "HAIR"):
         return np.zeros((0, BLOB_FIELDS))
     if style == "LAYERS":
         blobs = _layer_blobs(params, skeleton, rng)
@@ -1398,6 +1472,7 @@ class TreeData:
         self.blobs = blobs
         self.half_width = half_width
         self.anchor = anchor
+        self.strands = Strands()
 
     @property
     def branch_counts(self):
@@ -1874,6 +1949,183 @@ def needle_surface(data):
     return np.array(verts, dtype=np.float64).reshape(-1, 3), faces
 
 
+class Strands:
+    """Straight hair strands: root points, unit directions and lengths, (N, 3), (N, 3), (N,)."""
+
+    def __init__(self, roots=None, directions=None, lengths=None):
+        self.roots = np.zeros((0, 3)) if roots is None else np.asarray(roots, dtype=np.float64).reshape(-1, 3)
+        self.directions = np.zeros((0, 3)) if directions is None else np.asarray(directions, dtype=np.float64).reshape(-1, 3)
+        self.lengths = np.zeros(0) if lengths is None else np.asarray(lengths, dtype=np.float64).reshape(-1)
+
+    def __len__(self):
+        return len(self.lengths)
+
+    @property
+    def tips(self):
+        return self.roots + self.directions * self.lengths[:, None]
+
+
+#: Edge of the tiny triangle each strand grows from.
+HAIR_CARD_SIZE = 0.01
+
+
+def _cone_direction(axis, angle, rng):
+    """Random unit vector at most ``angle`` (radians) from ``axis``, uniform over the cap."""
+    cos_theta = 1.0 - rng.random() * (1.0 - math.cos(angle))
+    theta = math.acos(min(max(cos_theta, -1.0), 1.0))
+    return _rotate(_rotate(axis, _perpendicular(axis), theta), axis, rng.uniform(0.0, 2.0 * math.pi))
+
+
+def _droop(direction, droop):
+    """Tilt ``direction`` towards the ground by ``droop`` radians (negative lifts it)."""
+    if droop >= 0.0:
+        return _rotate_towards(direction, np.array([0.0, 0.0, -1.0]), droop)
+    return _rotate_towards(direction, np.array([0.0, 0.0, 1.0]), -droop)
+
+
+def _split(total, weights):
+    """``total`` items shared out in proportion to ``weights`` (largest remainders)."""
+    weights = np.asarray(weights, dtype=np.float64)
+    if len(weights) == 0 or weights.sum() <= 0.0:
+        return np.zeros(len(weights), dtype=np.int64)
+    exact = total * weights / weights.sum()
+    counts = np.floor(exact).astype(np.int64)
+    order = np.argsort(-(exact - counts), kind="stable")
+    counts[order[: total - int(counts.sum())]] += 1
+    return counts
+
+
+def _hair_on_branches(data, rng):
+    """(root, direction, length factor) of strands along the branches, or the stems without branches."""
+    params = data.params
+    stems = set(data.skeleton.stems)
+    lines = [p for i, p in enumerate(data.polylines) if p.level > 0 and i not in stems]
+    start = params.hollow
+    if not lines:
+        # A bare trunk: strands along the stems inside the canopy.
+        lines = [data.polylines[i] for i in sorted(stems)]
+    angle = math.radians(params.hair_spread)
+    up = np.array([0.0, 0.0, 1.0])
+    result = []
+    for polyline, count in zip(lines, _split(params.hair_count, [p.length for p in lines])):
+        for k in range(int(count)):
+            s = start + (1.0 - start) * (k + rng.random()) / count
+            base, tangent, _ = polyline.sample(s)
+            if polyline.level == 0 and base[2] < data.envelope.bottom:
+                continue
+            side = np.cross(up, tangent)
+            side = _normalize(side) if np.linalg.norm(side) > 1e-6 else _perpendicular(tangent)
+            # Flatten 1 keeps the strands level with the branch, on either side.
+            roll = rng.uniform(-1.0, 1.0) * (1.0 - params.hair_flatten) * math.pi / 2.0
+            if rng.random() < 0.5:
+                roll += math.pi
+            out = _rotate(side, tangent, roll)
+            direction = _normalize(tangent * math.cos(angle) + out * math.sin(angle))
+            v = (s - start) / max(1.0 - start, 1e-6)
+            result.append((base, direction, 1.0 - 0.5 * v**1.5))
+    return result
+
+
+def _hair_at_tips(data, rng):
+    params = data.params
+    angle = math.radians(params.hair_spread)
+    result = []
+    for tip, count in zip(data.tips, _split(params.hair_count, np.ones(len(data.tips)))):
+        for _ in range(int(count)):
+            result.append((tip.point, _cone_direction(tip.direction, angle, rng), 1.0))
+    return result
+
+
+def _hair_on_canopy(data, rng):
+    params = data.params
+    verts, faces = envelope_surface(data.envelope, 0.25)
+    tris, _ = triangles(faces)
+    if len(tris) == 0:
+        return []
+    a, b, c = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
+    cross = np.cross(b - a, c - a)
+    cumulative = np.cumsum(np.linalg.norm(cross, axis=1))
+    normals = cross / np.maximum(np.linalg.norm(cross, axis=1, keepdims=True), 1e-12)
+    angle = math.radians(params.hair_spread)
+    result = []
+    for _ in range(params.hair_count):
+        tri = int(min(np.searchsorted(cumulative, rng.random() * cumulative[-1]), len(tris) - 1))
+        u, v = rng.random(), rng.random()
+        if u + v > 1.0:
+            u, v = 1.0 - u, 1.0 - v
+        point = a[tri] + (b[tri] - a[tri]) * u + (c[tri] - a[tri]) * v
+        result.append((point, _cone_direction(normals[tri], angle, rng), 1.0))
+    return result
+
+
+def hair_strands(data):
+    """Hair canopy strands (``Strands``), from the branches, the tips or the canopy surface.
+
+    Every strand tilts ``hair_droop`` towards the ground, loses up to
+    ``hair_length_variation`` of its length at random, and is shortened to
+    stay within the overhang radius and between the ground and the tree
+    height; strands cut below a quarter of their length are dropped.
+    """
+    params = data.params
+    if params.canopy_style != "HAIR" or params.hair_count <= 0 or params.hair_length <= 0.0:
+        return Strands()
+    rng = stage_rng(params.seed, "hair")
+    source = {"BRANCHES": _hair_on_branches, "TIPS": _hair_at_tips, "CANOPY": _hair_on_canopy}[params.hair_source]
+    droop = math.radians(params.hair_droop)
+    bounds = SimpleNamespace(cx=data.anchor[0], cy=data.anchor[1], radius=params.overhang * data.half_width)
+    roots, directions, lengths = [], [], []
+    for root, direction, factor in source(data, rng):
+        direction = _droop(direction, droop + rng.uniform(-1.0, 1.0) * params.jitter * math.radians(10.0))
+        wanted = params.hair_length * factor * (1.0 - params.hair_length_variation * rng.random())
+        length = min(wanted, _reach_limit(np.asarray(root, dtype=np.float64), direction, bounds, params.height))
+        if length < 0.25 * wanted or length <= 1e-4:
+            continue
+        roots.append(root)
+        directions.append(direction)
+        lengths.append(length)
+    return Strands(roots, directions, lengths)
+
+
+def hair_emitter(strands):
+    """Emitter mesh for Blender's hair: one tiny triangle per strand, facing along it.
+
+    Hair grows along the emitter's normal; with one particle per (equal)
+    triangle and no random emission, each strand starts at its triangle.
+    Returns (verts, faces, per-vertex length weight relative to the longest
+    strand).
+    """
+    n = len(strands)
+    if n == 0:
+        return np.zeros((0, 3)), [], np.zeros(0)
+    d = strands.directions
+    a = np.cross(d, np.array([0.0, 0.0, 1.0]))
+    flat = np.linalg.norm(a, axis=1) < 1e-6
+    a[flat] = np.cross(d[flat], np.array([1.0, 0.0, 0.0]))
+    a /= np.linalg.norm(a, axis=1, keepdims=True)
+    b = np.cross(d, a)
+    # Counter-clockwise around d, so the face normal is d.
+    radius = HAIR_CARD_SIZE / math.sqrt(3.0)
+    corners = [a * math.cos(t) + b * math.sin(t) for t in (0.0, 2.0 * math.pi / 3.0, 4.0 * math.pi / 3.0)]
+    verts = np.stack([strands.roots + radius * c for c in corners], axis=1).reshape(-1, 3)
+    faces = [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(n)]
+    weights = np.repeat(strands.lengths / strands.lengths.max(), 3)
+    return verts, faces, weights
+
+
+def hair_accents(strands, params):
+    """Accent dots (flowers, fruit) at the tips of a share of the strands."""
+    if params.accent_mode != "DOTS" or len(strands) == 0 or params.accent_amount <= 0.0:
+        return MeshData()
+    rng = stage_rng(params.seed, "accent")
+    count = int(min(round(params.accent_amount * len(strands)), 300))
+    sphere_verts, sphere_faces = icosphere(1)
+    mesh = MeshData()
+    tips = strands.tips
+    for index in sorted(rng.sample(range(len(strands)), count)):
+        mesh.extend(MeshData(sphere_verts * params.accent_size + tips[index], sphere_faces, ACCENT))
+    return mesh
+
+
 def canopy_mesh(data, verts, faces):
     """Displaced canopy plus accent, from a raw canopy surface."""
     params = data.params
@@ -1904,6 +2156,9 @@ def canopy_surface(data, polygonize=None):
         return envelope_surface(data.envelope, resolution)
     if params.canopy_style == "NEEDLES":
         return needle_surface(data)
+    if params.canopy_style == "HAIR":
+        # The strands are rendered by Blender's hair particles instead.
+        return np.zeros((0, 3)), []
     if len(data.blobs) == 0:
         return np.zeros((0, 3)), []
     if polygonize is not None and params.blob_merge > 0.0:
@@ -1912,11 +2167,16 @@ def canopy_surface(data, polygonize=None):
 
 
 def build(params, polygonize=None):
-    """Generate a tree and its full mesh data: (TreeData, MeshData)."""
+    """Generate a tree and its full mesh data: (TreeData, MeshData).
+
+    With the hair style, ``TreeData.strands`` holds the hair strands.
+    """
     data = generate(params)
     mesh = tube_mesh(data)
     verts, faces = canopy_surface(data, polygonize)
     if len(faces):
         mesh.extend(canopy_mesh(data, verts, faces))
+    data.strands = hair_strands(data)
+    mesh.extend(hair_accents(data.strands, params))
     mesh.extend(base_mesh(params, data.half_width, data.anchor))
     return data, mesh

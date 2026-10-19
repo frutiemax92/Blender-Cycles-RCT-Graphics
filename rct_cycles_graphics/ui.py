@@ -169,9 +169,11 @@ class RCT_PT_materials(bpy.types.Panel):
 def _tree_param_active(settings, name):
     """Whether a tree setting has an effect with the current choices."""
     style = settings.canopy_style
-    blobs = style not in ("TOPIARY", "NEEDLES", "NONE")
+    blobs = style not in ("TOPIARY", "NEEDLES", "HAIR", "NONE")
     needles = style == "NEEDLES"
-    noisy = style not in ("NEEDLES", "NONE")
+    hair = style == "HAIR"
+    hair_children = hair and settings.hair_children > 0
+    noisy = style not in ("NEEDLES", "HAIR", "NONE")
     conditions = {
         "large_width": settings.size == "LARGE",
         "large_length": settings.size == "LARGE",
@@ -188,20 +190,33 @@ def _tree_param_active(settings, name):
         "clump_flatten": blobs,
         "blob_merge": blobs,
         "droop": blobs,
-        "hollow": (blobs and style != "COLUMN") or needles,
+        "hollow": (blobs and style != "COLUMN") or needles or (hair and settings.hair_source == "BRANCHES"),
         "needle_length": needles,
         "needle_width": needles,
         "needle_spacing": needles,
         "needle_angle": needles,
         "needle_droop": needles,
         "needle_rows": needles,
+        "hair_source": hair,
+        "hair_count": hair,
+        "hair_length": hair,
+        "hair_length_variation": hair,
+        "hair_spread": hair,
+        "hair_flatten": hair and settings.hair_source == "BRANCHES",
+        "hair_droop": hair,
+        "hair_width": hair,
+        "hair_tip_width": hair,
+        "hair_children": hair,
+        "hair_child_radius": hair_children,
+        "hair_clump": hair_children,
+        "hair_roughness": hair_children,
         "lumpiness": noisy,
-        "lump_scale": noisy or settings.accent_mode == "TOP_FACING",
+        "lump_scale": noisy or (settings.accent_mode == "TOP_FACING" and not hair),
         "raggedness": noisy,
         "resolution": noisy,
-        "accent_amount": settings.accent_mode != "NONE",
+        "accent_amount": settings.accent_mode == "DOTS" or (settings.accent_mode == "TOP_FACING" and not hair),
         "accent_size": settings.accent_mode == "DOTS",
-        "accent_threshold": settings.accent_mode == "TOP_FACING",
+        "accent_threshold": settings.accent_mode == "TOP_FACING" and not hair,
         "base_radius": settings.base_style != "NONE",
         "base_height": settings.base_style != "NONE",
     }
@@ -272,8 +287,11 @@ class RCT_PT_tree(bpy.types.Panel):
         box = layout.box()
         clearance = alignment.clearance_from_height(settings.stat_top) / alignment.CLEARANCE_UNIT
         fits = "fits footprint" if settings.stat_fits else "wider than footprint"
+        counts = "{:,} faces".format(settings.stat_faces)
+        if settings.canopy_style == "HAIR":
+            counts += " · {:,} strands".format(settings.stat_strands)
         box.label(
-            text="{:,} faces · {:g} clearance units · {}".format(settings.stat_faces, clearance, fits).replace(",", " "),
+            text="{} · {:g} clearance units · {}".format(counts, clearance, fits).replace(",", " "),
             icon="CHECKMARK" if settings.stat_fits else "INFO",
         )
         for line in filter(None, settings.warnings.split("\n")):

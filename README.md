@@ -108,7 +108,7 @@ full design.
 
 1. Pick a **preset** (Broadleaf, Birch, Gnarled Oak, Layered, Conifer, Snowy
    Conifer, Cypress, Shrub, Flowering Shrub, Topiary Ball/Cone/Heart,
-   Weeping, Blossom, Palm, Bare) and click **Add Tree**. The tree's
+   Weeping, Blossom, Palm, Hair Palm, Bare) and click **Add Tree**. The tree's
    footprint follows the scene's current object type and shape. The add-on
    then sets the object type to match and ticks the *Tree* flag.
 2. Select the tree to edit it. Settings are stored on the object, so a
@@ -122,7 +122,7 @@ full design.
 | Trunk | Length (where the trunk ends), base and top radius, taper, root flare, sides |
 | Trunk Shape | Straightness, bend frequency, gnarl, lean and lean direction, twist, forks |
 | Branches | Count, start/end height, bottom/top angle, length and length profile, radius ratio, curve, spread (spiral, whorled, random), sub-branches, jitter |
-| Leaves | Style (blobs, layers, needles, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, needle length/width/spacing/angle/droop/rows, mesh resolution |
+| Leaves | Style (blobs, layers, needles, hair, tiers, column, topiary, strands, none), envelope shape, width/height/offset, clump size and variation, extra clumps, clumps per tip, flatten, merge, lumpiness, raggedness, droop, hollow, needle length/width/spacing/angle/droop/rows, hair source/strands/length/angle/flatten/droop/width/children, mesh resolution |
 | Accent and Base | Dots (flowers, berries) or top-facing faces (snow); mound, pot or rocks base |
 
 **Materials.** The tree has four material slots: trunk, leaves, accent and
@@ -142,6 +142,17 @@ into neighbouring tiles. It warns above about 13 BU for small scenery, where
 the game's bounding box stops, and shows a **Match Scene** button if the
 scene's object type no longer matches the tree. **Use Suggested Look**
 applies the preset's outline setting.
+
+**Hair leaves.** The *Hair* style renders the leaves as Blender particle
+hair, for fine, bushy fronds such as the RCT2 palms. The strands grow from
+the branches (like fronds, *Flatten* keeps them beside the branch), from
+the branch tips (tufts) or from the canopy surface. Each strand is straight,
+tilted down by *Strand Droop* and kept inside the overhang and the tree
+height. *Children* adds rendered strands around each one, with *Child
+Spread*, *Clump* and *Roughness*. The hair lives on a child object,
+`RCT Tree Hair`, whose hidden emitter mesh has one tiny triangle per strand;
+it uses the leaves material and is removed when you pick another style.
+Delete it together with the tree (*Delete Hierarchy*).
 
 **Apply (Freeze Mesh)** turns the tree into a plain mesh for manual editing.
 Until then, regenerating replaces manual mesh edits.

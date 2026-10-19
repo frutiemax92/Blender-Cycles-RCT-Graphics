@@ -312,6 +312,56 @@ class TreeTests(unittest.TestCase):
         bpy.ops.rct_graphics.tree_match_scene()
         self.assertEqual(self.props.small_shape, "FULL")
 
+    def test_hair_canopy(self):
+        obj = self.add("HAIR_PALM")
+        settings = obj.rct_tree
+        hair = settings.hair_object
+        self.assertIs(hair.parent, obj)
+        self.assertFalse(hair.show_instancer_for_render)
+        self.assertIs(hair.data.materials[0], settings.material_leaves)
+        evaluated = hair.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        psys = evaluated.particle_systems[0]
+        self.assertEqual(len(psys.particles), len(hair.data.polygons))
+        self.assertEqual(settings.stat_strands, len(hair.data.polygons) * (1 + settings.hair_children))
+        # Each strand grows along its emitter triangle to its own length
+        # (co_hair reads the children instead when there are any).
+        self.edit(obj, hair_children=0)
+        evaluated = hair.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        psys = evaluated.particle_systems[0]
+        data, _ = tree.build(tree_generator.to_params(settings))
+        steps = 2**psys.settings.display_step
+        tips = np.array([psys.co_hair(evaluated, particle_no=i, step=steps) for i in range(len(psys.particles))])
+        expected = data.strands.tips
+        nearest = np.linalg.norm(tips[:, None, :] - expected[None, :, :], axis=-1).min(axis=1)
+        self.assertLess(nearest.max(), 0.02)
+
+        sprites = self.render()
+        self.assertEqual(len(sprites), 4)
+        custom = bpy.data.materials.new("Custom Fronds")
+        settings.material_leaves = custom
+        self.assertIs(hair.data.materials[0], custom)
+
+        self.edit(obj, canopy_style="BLOBS")
+        self.assertIsNone(settings.hair_object)
+        self.assertNotIn(tree_generator.HAIR_NAME, [o.name for o in bpy.data.objects])
+        self.assertEqual(len(bpy.data.particles), 0)
+        self.assertFalse([m for m in bpy.data.meshes if m.users == 0 and m.name.startswith(tree_generator.HAIR_NAME)])
+
+    def test_hair_object_survives_regeneration_and_duplication(self):
+        obj = self.add("HAIR_PALM")
+        hair = obj.rct_tree.hair_object
+        self.edit(obj, hair_count=200, hair_children=3)
+        self.assertIs(obj.rct_tree.hair_object, hair)
+        self.assertEqual(len(hair.data.polygons), 200)
+        self.assertEqual(hair.particle_systems[0].settings.rendered_child_count, 3)
+        copy = obj.copy()
+        copy.data = obj.data.copy()
+        bpy.context.scene.collection.objects.link(copy)
+        tree_generator.regenerate(copy)
+        self.assertIsNot(copy.rct_tree.hair_object, hair)
+        self.assertIs(copy.rct_tree.hair_object.parent, copy)
+        self.assertIs(hair.parent, obj)
+
     def test_apply_freezes_the_mesh(self):
         obj = self.add()
         mesh = obj.data
